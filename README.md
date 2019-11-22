@@ -1,2 +1,2 @@
 # ivy-lang
- a small language interpreter in python
+a programming language written in python
