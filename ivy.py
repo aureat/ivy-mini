@@ -3,10 +3,10 @@
 ***  Main Class
 
 TODO:
-( ) Implement a tokenizer that stores the index of the first character and line number in program
-( ) Line and character (wise) tokenizer
+(+) Implement a tokenizer that stores the index of the first character and line number in program
+(+) Line and character (wise) tokenizer
 ( ) Implement syntax error checking / handling inside the interpreter
-( ) Error handler function with pretty printing of line number etc.
+(+) Error handler function with pretty printing of line number etc.
 ( ) Integrate the trace collector and implement a stack trace error handler
 ( ) Locals and Globals
 ( ) Variable declaration without explicit type declaration
@@ -37,6 +37,7 @@ Syntactic Elements and Advancements
 import os
 import sys
 import string
+import argparsew
 from enum import Enum
 
 """
@@ -55,112 +56,11 @@ Object (IvyObject) => ClassObject | ...
   - dict (Dictionary)
   - arr (Array)
   - Error (Error)
-
 """
-
-class IvyObject(object):
-
-    def __init__(self, obj_name=None, obj_type=None):
-        name = obj_name if obj_name != None else self.get_name()
-        self.obj_name = name
-        self.objdef = {
-            'obj_name': name,
-            'obj_type': obj_type if obj_type != None else self.get_name(),
-            'obj_class_name': self.get_name(),
-        }
-
-    def get_prop(self, att):
-        try:
-            return getattr(self, att)
-        except AttributeError:
-            return False
-
-    def get_attr(self, att):
-        if att in self.objdef:
-            return self.objdef[att]
-        return False
-
-    def get_type(self):
-        return self.get_attr('obj_type')
-
-    def get_obj(self):
-        return self
-
-    def get_name(self):
-        return self.__class__.__name__
-
-    def dynamic_package(self): pass
-
-    def __repr__(self):
-        return '<{}: {}, {} at {}>'.format(self.get_name(), self.obj_name, self.get_type(), id(self))
-
-class DataObject(IvyObject): pass
-
-class Null(IvyObject):
-    def __init__(self):
-        super().__init__(obj_type='null')
-
-class Integer(IvyObject):
-    def __init__(self):
-        super().__init__(obj_type='int')
-
-class Float(IvyObject):
-    def __init__(self):
-        super().__init__(obj_type='float')
-
-class String(IvyObject):
-    def __init__(self):
-        super().__init__(obj_type='str')
-
-class Boolean(IvyObject):
-    def __init__(self):
-        super().__init__(obj_type='bool')
-
-class Collection(IvyObject):
-    def __init__(self):
-        super().__init__(obj_type='coll')
-
-class Dictionary(IvyObject):
-    def __init__(self):
-        super().__init__(obj_type='dict')
-
-class Array(IvyObject):
-    def __init__(self):
-        super().__init__(obj_type='arr')
-
-class Function(IvyObject):
-    def __init__(self, name, params, code, ):
-        super().__init__(obj_name=name,obj_type='func')
-        self.objdef.update({
-            'obj_params': params,
-            'obj_code': code, # stores a code object
-        })
-
-    def obj_call(self):
-        pass
-
-    def invoke(self):
-        self.obj_call()
-
-class CodeObject(IvyObject):
-
-    def __init__(self, code):
-        super().__init__()
-        self.objdef.update({
-            'obj_code': code,
-        })
-
-    def invoke(self):
-        pass
-
-class IvyClass(IvyObject):
-    def __init__(self, obj_type='struct'):
-        pass
 
 """
 *** Trace Stack
 """
-
 class TraceStack(IvyObject):
     def __init__(self):
         super().__init__(self)
@@ -180,6 +80,7 @@ class TraceStack(IvyObject):
             trace.append({
                 'filename': i['file'].name,
                 'content': i['file'].content,
+                'line_content': i['file'].get_line(line),
                 'line': i['token'].line,
                 'col': i['token'].col,
                 'name': '<module>'
@@ -189,7 +90,6 @@ class TraceStack(IvyObject):
 """
 *** ERROR Objects
 """
-
 class ErrorCode(Enum):
     UNEXPECTED_TOKEN = 'Unexpected token'
     ID_NOT_FOUND = 'Identifier not found'
@@ -208,12 +108,14 @@ class Error(IvyObject):
     def get_error(self):
       error = '\nTraceback:\n'
       for i in self.get_attr('error_trace').get_trace():
-          line = i['content'].split('\n')[i['line']]
+          line = i['line_content']
           char = i['col']
           trace_beg = min(30,len(line[:char]))
           trace_end = min(30,len(line[char:]))
-          error += '   File {}, line {} by {}\n'.format(i['filename'], i['line']+1, i['name'])
+          error += '   File {}, line {}, col {} in {}\n'.format(i['filename'], i['line']+1, i['col']+1, i['name'])
           error += '\t' + line[char-trace_beg:char+trace_end] + '\n'
+          if i['col']:
+              error += '\t' + " " * i['col'] + '^\n'
       error += '{}: {}\n'.format(self.objdef['error_name'], self.objdef['error_details'])
       return error
 
@@ -230,9 +132,8 @@ class LexerError(Error):
         super().__init__(desc, 'LexerError', trace)
 
 """
-*** Token
+*** Token and TokenType Clases
 """
-
 class TokenType(Enum):
     # SINGLE CHARACTER
     PLUS = '+'
@@ -283,8 +184,6 @@ class TokenType(Enum):
     FUNC = 'func'
     FUNCTION = 'function'
     STRUCT = 'struct'
-    TRUE = 'true'
-    FALSE = 'false'
     # CONTROL FLOW
     IF = 'if'
     ELSE = 'else'
@@ -292,6 +191,7 @@ class TokenType(Enum):
     RETURN = 'return'
     AND = 'and'
     OR = 'or'
+    NOT = 'not'
     # LOOP
     WHILE = 'while'
     FOR = 'for'
@@ -325,34 +225,38 @@ def language_keywords():
     return {token_type.value: token_type for token_type in token_types[ind_start:ind_end+1]}
 
 """
-*** CONSTANT DATA
+*** LEXER CONSTANTS
 """
-
 ASCII_LETTERS = string.ascii_letters
 DIGITS = string.digits
 ALPHA_NUMERIC = ASCII_LETTERS + DIGITS
 RESERVED_KEYWORDS = language_keywords()
-SINGLE_TOKENS = ['"', '\'', '+', '/', '%', '(', ')', ';', ':', ',', '[', ']', '{', '}']
+SINGLE_TOKENS = ['+', '/', '%', '(', ')', ';', ':', ',', '[', ']', '{', '}']
 
 """
-*** File
+*** FILES AND PACKAGES
 """
 
-class Package(object): pass
+class Package(IvyObject): pass
 
 class DynamicPackage(Package): pass
 
-class File(object):
+class File(IvyObject):
     def __init__(self, name, path, content, package=None):
         self.name = name
         self.path = path
         self.content = content
         self.package = package
 
-"""
-*** Lexer
-"""
+    def split_lines(self):
+        return self.content.split('\n')
 
+    def get_line(self, ind):
+        return self.split_lines()[ind]
+
+"""
+*** LEXER AND TOKENIZER
+"""
 class Lexer(object):
 
     def __init__(self, file):
@@ -443,7 +347,6 @@ class Lexer(object):
         return token
 
     def eat_string(self, quote):
-        self.advance()
         value = ''
         while self.current_char != None and self.current_char != quote:
             value += self.current_char
@@ -451,7 +354,7 @@ class Lexer(object):
         return value
 
     def rtoken(self, tok, val):
-        if not self.current_char.isspace():
+        if self.current_char != None and not self.current_char.isalnum() and not self.current_char.isspace():
             self.error('Unexpected token', tok)
         tok.type = TokenType(val)
         tok.value = val
@@ -468,6 +371,17 @@ class Lexer(object):
                 self.skip_comment()
                 continue
             tok = Token(line=self.line, col=self.col)
+            for q in ['\'', '"']:
+                if self.match(q):
+                    str_tok = Token(line=self.line,col=self.col)
+                    string = self.eat_string(q)
+                    str_tok.type = TokenType.STRING_CONST
+                    str_tok.value = string
+                    tok2 = Token(line=self.line, col=self.col)
+                    if self.match(q):
+                        return self.rtoken(tok, q), str_tok, self.rtoken(tok2, q)
+                    else:
+                        self.error('Expected a `' + q + '` to finish string literal', tok2)
             if self.current_char.isalpha():
                 return self.eat_id()
             elif self.current_char.isdigit():
@@ -513,11 +427,442 @@ class Lexer(object):
                 self.error('Unexpected token', tok)
         return Token(type=TokenType.EOF, value=None)
 
+    def tokenize(self):
+        tokens = []
+        tok = self.get_token()
+        token = [i for i in tok] if type(tok) == tuple else [tok]
+        while token[0].type!=TokenType.EOF:
+            tokens += token
+            tok = self.get_token()
+            token = [i for i in tok] if type(tok) == tuple else [tok]
+        tokens += token
+        return tokens
+
+"""
+*** System Classes
+"""
+class SystemConstants(Enum):
+    SYSTEM_BUILTINS = ['length', 'type', 'repr', 'name', 'obj', 'objdef']
+    BUILTIN_NAMES = ['Integer', 'Float', 'String', 'true', 'false', 'Function']
+    INTEGER = 'INTEGER'
+    FLOAT = 'FLOAT'
+    STRING = 'STRING'
+    FUNCTION = 'FUNCTION'
+
+class ARType(Enum):
+    PROGRAM   = 'PROGRAM'
+
+class CallStack:
+    def __init__(self):
+        self._records = []
+
+    def push(self, ar):
+        self._records.append(ar)
+
+    def pop(self):
+        return self._records.pop()
+
+    def peek(self):
+        return self._records[-1]
+
+    def __str__(self):
+        s = '\n'.join(repr(ar) for ar in reversed(self._records))
+        s = f'CALL STACK\n{s}\n'
+        return s
+
+    def __repr__(self):
+        return self.__str__()
+
+
+class ActivationRecord:
+    def __init__(self, name, type, nesting_level):
+        self.name = name
+        self.type = type
+        self.nesting_level = nesting_level
+        self.members = {}
+
+    def __setitem__(self, key, value):
+        self.members[key] = value
+
+    def __getitem__(self, key):
+        return self.members[key]
+
+    def get(self, key):
+        return self.members.get(key)
+
+    def __str__(self):
+        lines = [
+            '{level}: {type} {name}'.format(
+                level=self.nesting_level,
+                type=self.type.value,
+                name=self.name,
+            )
+        ]
+        for name, val in self.members.items():
+            lines.append(f'   {name:<20}: {val}')
+
+        s = '\n'.join(lines)
+        return s
+
+    def __repr__(self):
+        return self.__str__()
+
+"""
+*** SYSTEM OBJECTS
+"""
+class IvyObject(object):
+
+    """ INITIALIZE IVY OBJECT """
+    def __init__(self, obj_name=None, obj_type=None):
+        name = obj_name if obj_name != None else self.get_name()
+        self.obj_name = name
+        self.objdef = {
+            'obj_name': name,
+            'obj_type': obj_type if obj_type != None else self.get_name(),
+            'obj_class_name': self.get_name(),
+        }
+
+    """ Python Attributes """
+    def getprop(self, att):
+        return getattr(self, att, False)
+
+    def setprop(self, att, val):
+        setattr(self, att, val)
+
+    def delprop(self, att):
+        delattr(self, att)
+
+    """ Ivy Object Attributes """
+    def attrget(self, att):
+        if att in self.objdef:
+            return self.objdef[att]
+        return False
+
+    def attrset(self, att, val):
+        self.objdef[att] = val
+
+    def attrdel(self, att, val):
+        self.objdef.pop(att)
+
+    """ Ivy Object General """
+    def gettype(self):
+        return self.get_attr('obj_type')
+
+    def getobj(self):
+        return self
+
+    def getname(self):
+        return self.__class__.__name__
+
+    def getrepr(self):
+        return self.__repr__()
+
+    """ OPERATIONS ON OBJECTS """
+    def op_mult(self, other): pass
+    def op_div(self, other): pass
+    def op_add(self, other): pass
+    def op_sub(self, other): pass
+    def op_pow(self): pass
+    def op_eq(self): pass
+    def op_lt(self): pass
+    def op_lte(self): pass
+    def op_gt(self): pass
+    def op_gte(self): pass
+    def op_in(self): pass
+
+    """ OBJECT PROPERTIES """
+    def istrue(self): pass
+    def isnull(self): pass
+
+    """ LIST """
+    def getitem(self): pass
+    def additem(self): pass
+    def delitem(self): pass
+    def length(self): pass
+
+    def isfalse(self):
+        return not self.istrue()
+
+    def kill(self):
+        self.__del__()
+
+    def dynamic_package(self): pass
+
+    def __repr__(self):
+        return '<{}: {}, {} at {}>'.format(self.get_name(), self.obj_name, self.get_type(), id(self))
+
+class Null(IvyObject):
+    def __init__(self):
+        super().__init__(obj_type='null')
+
+    def isnull(self):
+        return True
+
+class DataObject(IvyObject):
+    def __init__(self, obj_type, data_type=None, data=None):
+        data_type = data_type if data_type is not None else obj_type
+        super().__init__(obj_type=obj_type)
+        data_type
+        self.objdef.update({
+            'obj_data_type': data_type,
+            'obj_data': data
+        })
+
+class Integer(DataObject):
+    def __init__(self, data=None):
+        super().__init__(obj_type='int', data=data)
+
+class Float(DataObject):
+    def __init__(self):
+        super().__init__(obj_type='float', data=data)
+
+class String(DataObject):
+    def __init__(self):
+        super().__init__(obj_type='str', data=data)
+
+class Boolean(DataObject):
+    def __init__(self):
+        super().__init__(obj_type='bool', data=data)
+
+class Collection(DataObject):
+    def __init__(self):
+        super().__init__(obj_type='coll', data=data)
+        self.objdef.update({
+            'obj_coll': []
+        })
+
+    def getitem(self, ref):
+        return self.objdef['obj_coll'][ref]
+
+    def additem(self, val):
+        self.objdef['obj_coll'].append(val)
+
+    def delitem(self, val):
+        self.objdef['obj_coll'].remove(val)
+
+class Dictionary(DataObject):
+    def __init__(self):
+        super().__init__(obj_type='dict', data=data)
+
+class Array(DataObject):
+    def __init__(self):
+        super().__init__(obj_type='arr', data=data)
+
+class Function(IvyObject):
+    def __init__(self, name, params, code, ):
+        super().__init__(obj_name=name,obj_type='func')
+        self.objdef.update({
+            'obj_params': params,
+            'obj_code': code, # stores a code object
+        })
+
+    def obj_call(self):
+        pass
+
+    def invoke(self):
+        self.obj_call()
+
+class CodeObject(IvyObject):
+
+    def __init__(self, code):
+        super().__init__()
+        self.objdef.update({
+            'obj_code': code,
+        })
+
+    def invoke(self):
+        pass
+
+class IvyClass(IvyObject):
+    def __init__(self, obj_type='struct'):
+        pass
+
+"""
+*** PARSER
+*** LANGUAGE MODELING
+
+Parser Nodes
+- Data
+- VariableAssign
+- VariableAccess
+- AttributeAccess
+- CodeBlock
+- FunctionBlock
+- FunctionDeclaration
+- Program
+- BinaryOperator
+- UnaryOperator
+"""
+
+class Parser(IvyObject):
+
+    def __init__(self, file, tokens):
+        file = file
+        self.lexer = Lexer()
+        self.tokens = self.lexer.tokenize()
+        self.idtoken = 0
+        self.ctoken = self.tokens[0]
+
+    def get_token(self):
+        self.idtoken += 1
+        self.ctoken = self.tokens[self.idtoken]
+        if self.ctoken.type = TokenType.EOF:
+            return False
+
+""" Data Objects """
+class Data:
+    def __init__(self, tok):
+        self.value = tok
+
+class VariableType:
+    def __init__(self, tok):
+        self.type = tok
+
+class VariableAssign:
+    def __init__(self, type, tok, value):
+        self.type = type
+        self.variable = tok
+        self.value = value
+
+class VariableAccess:
+    def __init__(self, name):
+        self.variable = name
+
+class AttributeAccess:
+    def __init__(self, var, att):
+        self.variable = var
+        self.attribute = att
+
+""" Functional Objects """
+class CodeBlock:
+    def __init__(self, code=None):
+        self.code = code if code != None else []
+
+class FunctionBlock:
+    def __init__(self, declarations, block):
+        self.declarations = declarations
+        self.code = block
+
+class Program:
+    def __init__(self, name, block):
+        self.name = name
+        self.block = block
+
+class Parameter:
+    def __init__(self, type, name):
+        self.type = type
+        self.param = name
+
+class Parameters:
+    def __init__(self, params):
+        self.params = params if params is not None else []
+
+class FunctionDeclaration:
+    def __init__(self, func, params, code):
+        self.func = func
+        self.params = params
+        self.code = code
+
+class FunctionCall:
+    def __init__(self, func, params, token):
+        self.name = func
+        self.params = params
+        self.token = token
+
+class Return:
+    def __init__(self, toret):
+        self.return = toret
+
+""" Operators """
+class BinaryOperator:
+    def __init__(self, left, op, right):
+        self.left = left
+        self.op = op
+        self.right = right
+
+class UnaryOperator:
+    def __init__(self, op, node):
+        self.op = op
+        self.node = node
+
+""" Control Flow """
+class Conditional:
+    def __init__(self, cond, ifb, elseb):
+        self.condition = cond
+        self.ifblock = ifb
+        self.elseblock = elseb
+
+class WhileLoop:
+    def __init__(self, cond, body, retnull):
+        self.condition = cond
+        self.body = body
+        self.retnull = retnull
+
+class ForLoop:
+    def __init__(self, var, from, to, step, body, retnull):
+        self.variable = var
+        self.from = from
+        self.to = to
+        self.step = step
+        self.body = body
+        self.retnull = retnull
+
+class ContinueLoop: pass
+class BreakLoop: pass
+
+
 """
 *** Main Interpreter
 """
 
-class Interpreter(IvyObject): pass
+class Interpreter():
+
+    def __init__(self, tree):
+        self.tree = tree
+        self.call_stack = CallStack()
+
+    def log(self, msg):
+        if _SHOULD_LOG_STACK:
+            print(msg)
+
+    def binary_op(self, node):
+        if node.op.type == TokenType.PLUS:
+            return self.visit(node.left) + self.visit(node.right)
+        elif node.op.type == TokenType.MINUS:
+            return self.visit(node.left) - self.visit(node.right)
+        elif node.op.type == TokenType.MUL:
+            return self.visit(node.left) * self.visit(node.right)
+        elif node.op.type == TokenType.INTEGER_DIV:
+            return self.visit(node.left) // self.visit(node.right)
+        elif node.op.type == TokenType.FLOAT_DIV:
+            return float(self.visit(node.left)) / float(self.visit(node.right))
+
+    def program(self, node):
+        program_name = node.name
+        self.log(f'ENTER: PROGRAM {program_name}')
+
+        ar = ActivationRecord(
+            name=program_name,
+            type=ARType.PROGRAM,
+            nesting_level=1,
+        )
+        self.call_stack.push(ar)
+
+        self.log(str(self.call_stack))
+
+        self.visit(node.block)
+
+        self.log(f'LEAVE: PROGRAM {program_name}')
+        self.log(str(self.call_stack))
+
+        self.call_stack.pop()
+
+    def assign(self, node):
+        var_name = node.left.value
+        var_value = self.visit(node.right)
+
+        ar = self.call_stack.peek()
+        ar[var_name] = var_value
 
 """
 *** Ivy System
@@ -537,9 +882,13 @@ class System(IvyObject):
 
     def dynamic_package(self): pass
 
+class IvyConsole:
+    def __init__(self):
+        pass
+
 if __name__ == '__main__':
-    program = 'if this and that -> {\n "Altun \n}'
+    program = 'if this and that -> {\n "Altun  }'
     fl = File('<stdin>', '.', program)
-    lex = Lexer(fl)
-    for i in range(10):
-        print(lex.get_token())
+    pars = Parser(fl)
+    for i in pars.tokens:
+        print(i)
