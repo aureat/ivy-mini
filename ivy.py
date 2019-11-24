@@ -2,11 +2,11 @@
 ***  IVY Language Interpreter
 ***  Main Class
 
-TODO:
-(+) Implement a tokenizer that stores the index of the first character and line number in program
-(+) Line and character (wise) tokenizer
+TO DO:
+( )
+
+MORE TODO:
 ( ) Implement syntax error checking / handling inside the interpreter
-(+) Error handler function with pretty printing of line number etc.
 ( ) Integrate the trace collector and implement a stack trace error handler
 ( ) Locals and Globals
 ( ) Variable declaration without explicit type declaration
@@ -15,29 +15,24 @@ TODO:
 ( ) Array indexing using the square bracket notation (inside the factor)
 ( ) Array element assignment (figure out the best data structure to implement arrays)
 ( ) Add the dot attribute functionality
-
-( ) Data Types as Objects
 ( ) Expressions as array elements
 ( ) Open close paranthesis counter
-( ) Add support for multiple-line line-pass programs
-( ) File Object to store reference
-
-Environment has local and global references, internal system package implementation
-
-Advanced features
+( ) Environment has local and global references, internal system package implementation
 ( ) Add attribute-functions to objects
 ( ) Dynamic Package Creation
-
-Syntactic Elements and Advancements
 ( ) Nested blocks implementation
 ( ) Expressions of type ---> 1 if x > 0 else 0
+
+ADVANCED:
+( ) Implement the system package
+( ) Determine the functional structure of this ivy implementation
 
 """
 
 import os
 import sys
 import string
-import argparsew
+import argparse
 from enum import Enum
 
 """
@@ -59,6 +54,91 @@ Object (IvyObject) => ClassObject | ...
 """
 
 """
+*** Define the general ivy object
+"""
+
+class IvyObject(object):
+
+    """ INITIALIZE IVY OBJECT """
+    def __init__(self, obj_name=None, obj_type=None):
+        name = obj_name if obj_name != None else self.getname()
+        self.obj_name = name
+        self.objdef = {
+            'obj_name': name,
+            'obj_type': obj_type if obj_type != None else self.getname(),
+            'obj_class_name': self.getname(),
+        }
+
+    """ Python Attributes """
+    def getprop(self, att):
+        return getattr(self, att, False)
+
+    def setprop(self, att, val):
+        setattr(self, att, val)
+
+    def delprop(self, att):
+        delattr(self, att)
+
+    """ Ivy Object Attributes """
+    def attrget(self, att):
+        if att in self.objdef:
+            return self.objdef[att]
+        return False
+
+    def attrset(self, att, val):
+        self.objdef[att] = val
+
+    def attrdel(self, att, val):
+        self.objdef.pop(att)
+
+    """ Ivy Object General """
+    def gettype(self):
+        return self.attrget('obj_type')
+
+    def getobj(self):
+        return self
+
+    def getname(self):
+        return self.__class__.__name__
+
+    def getrepr(self):
+        return self.__repr__()
+
+    """ OPERATIONS ON OBJECTS """
+    def op_mult(self, other): pass
+    def op_div(self, other): pass
+    def op_add(self, other): pass
+    def op_sub(self, other): pass
+    def op_pow(self): pass
+    def op_eq(self): pass
+    def op_lt(self): pass
+    def op_lte(self): pass
+    def op_gt(self): pass
+    def op_gte(self): pass
+    def op_in(self): pass
+
+    """ OBJECT PROPERTIES """
+    def istrue(self): pass
+    def isnull(self): pass
+
+    """ LIST """
+    def getitem(self): pass
+    def additem(self): pass
+    def delitem(self): pass
+    def length(self): pass
+
+    def isfalse(self):
+        return not self.istrue()
+
+    def kill(self):
+        self.__del__()
+
+    def dynamic_package(self): pass
+
+    def __repr__(self):
+        return '<{}: {}, {} at {}>'.format(self.get_name(), self.obj_name, self.get_type(), id(self))
+
+"""
 *** Trace Stack
 """
 class TraceStack(IvyObject):
@@ -72,6 +152,7 @@ class TraceStack(IvyObject):
         self.objdef['trace'].append({
             'file': file,
             'token': token,
+            'module': Module()
         })
 
     def get_trace(self):
@@ -79,11 +160,12 @@ class TraceStack(IvyObject):
         for i in self.objdef['trace']:
             trace.append({
                 'filename': i['file'].name,
+                'filepath': i['file'].path,
                 'content': i['file'].content,
-                'line_content': i['file'].get_line(line),
+                'line_content': i['file'].get_line(i['token'].line),
                 'line': i['token'].line,
                 'col': i['token'].col,
-                'name': '<module>'
+                'name': i['module'].name,
             })
         return trace
 
@@ -106,30 +188,41 @@ class Error(IvyObject):
             'error_type': type})
 
     def get_error(self):
-      error = '\nTraceback:\n'
-      for i in self.get_attr('error_trace').get_trace():
-          line = i['line_content']
-          char = i['col']
-          trace_beg = min(30,len(line[:char]))
-          trace_end = min(30,len(line[char:]))
-          error += '   File {}, line {}, col {} in {}\n'.format(i['filename'], i['line']+1, i['col']+1, i['name'])
-          error += '\t' + line[char-trace_beg:char+trace_end] + '\n'
-          if i['col']:
-              error += '\t' + " " * i['col'] + '^\n'
-      error += '{}: {}\n'.format(self.objdef['error_name'], self.objdef['error_details'])
-      return error
+        error = '\nTraceback:\n'
+        for i in self.attrget('error_trace').get_trace():
+            line = i['line_content']
+            char = i['col']
+            trace_beg = min(30,len(line[:char]))
+            trace_end = min(30,len(line[char:]))
+            error += '   ' + str(i['filepath']) + '\n'
+            error += '   File {}, line {} (col. {}) in {}\n'.format(i['filename'], i['line']+1, i['col']+1, i['name'])
+            error += '\t' + line[char-trace_beg:char+trace_end] + '\n'
+            if i['col'] or i['col'] == 0:
+                error += '\t' + " " * i['col'] + '^\n'
+                error += '{}: {}\n'.format(self.objdef['error_name'], self.objdef['error_details'])
+        return error
 
-class SyntaxError(Error):
+    def __repr__(self):
+        self.get_error()
+
+    def __str__(self):
+        self.get_error()
+
+class IvySyntaxError(Error):
     def __init__(self, desc, trace=TraceStack()):
         super().__init__(desc, 'SyntaxError', trace)
 
-class ParseError(Error):
+class IvyParseError(Error):
     def __init__(self, desc, trace=TraceStack()):
         super().__init__(desc, 'ParseError', trace)
 
-class LexerError(Error):
+class IvyLexerError(Error):
     def __init__(self, desc, trace=TraceStack()):
         super().__init__(desc, 'LexerError', trace)
+
+class IvyIOError(Error):
+    def __init__(self, desc, trace=TraceStack()):
+        super().__init__(desc, 'IOError', trace)
 
 """
 *** Token and TokenType Clases
@@ -213,7 +306,7 @@ class Token:
         self.length = len(value) if value is not None else None
 
     def __str__(self):
-        return 'Token({type}, {value}, pos={line}:{col})'.format(type=self.type, value=str(self.value), line=self.line, col=self.col)
+        return 'Token({type}, {value}, pos={line}:{col})'.format(type=self.type, value=str(self.value), line=self.line+1, col=self.col+1)
 
     def __repr__(self):
         return self.__str__()
@@ -232,16 +325,17 @@ DIGITS = string.digits
 ALPHA_NUMERIC = ASCII_LETTERS + DIGITS
 RESERVED_KEYWORDS = language_keywords()
 SINGLE_TOKENS = ['+', '/', '%', '(', ')', ';', ':', ',', '[', ']', '{', '}']
+TERM_TOKENS = ['+','-','*','/','%','!','=','>','<','.',',']
 
 """
 *** FILES AND PACKAGES
 """
 
-class Package(IvyObject): pass
+class Package: pass
 
 class DynamicPackage(Package): pass
 
-class File(IvyObject):
+class File:
     def __init__(self, name, path, content, package=None):
         self.name = name
         self.path = path
@@ -254,12 +348,21 @@ class File(IvyObject):
     def get_line(self, ind):
         return self.split_lines()[ind]
 
+class Module:
+    def __init__(self, name=None):
+        self.name = name if name is not None else '<module>'
+
 """
 *** LEXER AND TOKENIZER
 """
 class Lexer(object):
 
-    def __init__(self, file):
+    def __init__(self, trace, file=None):
+        self.trace = trace
+        if file is not None:
+            self.load(file)
+
+    def load(self, file):
         self.file = file
         self.program = file.content
         self.pos = 0
@@ -271,7 +374,7 @@ class Lexer(object):
     def error(self, mes, tok):
         trace = TraceStack()
         trace.add_trace(self.file, tok)
-        err = LexerError(mes, trace)
+        err = IvyLexerError(mes, trace)
         output = err.get_error()
         print(output)
         quit()
@@ -354,8 +457,8 @@ class Lexer(object):
         return value
 
     def rtoken(self, tok, val):
-        if self.current_char != None and not self.current_char.isalnum() and not self.current_char.isspace():
-            self.error('Unexpected token', tok)
+        if self.current_char != None and self.current_char in TERM_TOKENS:
+            self.error('Unexpected tokenp', tok)
         tok.type = TokenType(val)
         tok.value = val
         return tok
@@ -385,7 +488,7 @@ class Lexer(object):
             if self.current_char.isalpha():
                 return self.eat_id()
             elif self.current_char.isdigit():
-                return self.number()
+                return self.eat_number()
             if self.match('='):
                 if self.match('='):
                     if self.match('='):
@@ -417,15 +520,15 @@ class Lexer(object):
             if self.match('.'):
                 if self.match('.'):
                     if self.match('.'):
-                        return self.rtoken(tok, '.')
+                        return self.rtoken(tok, '...')
                     return self.rtoken(tok, '..')
                 return self.rtoken(tok, '.')
             for i in SINGLE_TOKENS:
                 if self.match(i):
                     return self.rtoken(tok, i)
             if self.current_char != None:
-                self.error('Unexpected token', tok)
-        return Token(type=TokenType.EOF, value=None)
+                self.error('Unexpected tokens', tok)
+        return Token(type=TokenType.EOF, value=None, line=self.line, col=self.col)
 
     def tokenize(self):
         tokens = []
@@ -510,86 +613,6 @@ class ActivationRecord:
 """
 *** SYSTEM OBJECTS
 """
-class IvyObject(object):
-
-    """ INITIALIZE IVY OBJECT """
-    def __init__(self, obj_name=None, obj_type=None):
-        name = obj_name if obj_name != None else self.get_name()
-        self.obj_name = name
-        self.objdef = {
-            'obj_name': name,
-            'obj_type': obj_type if obj_type != None else self.get_name(),
-            'obj_class_name': self.get_name(),
-        }
-
-    """ Python Attributes """
-    def getprop(self, att):
-        return getattr(self, att, False)
-
-    def setprop(self, att, val):
-        setattr(self, att, val)
-
-    def delprop(self, att):
-        delattr(self, att)
-
-    """ Ivy Object Attributes """
-    def attrget(self, att):
-        if att in self.objdef:
-            return self.objdef[att]
-        return False
-
-    def attrset(self, att, val):
-        self.objdef[att] = val
-
-    def attrdel(self, att, val):
-        self.objdef.pop(att)
-
-    """ Ivy Object General """
-    def gettype(self):
-        return self.get_attr('obj_type')
-
-    def getobj(self):
-        return self
-
-    def getname(self):
-        return self.__class__.__name__
-
-    def getrepr(self):
-        return self.__repr__()
-
-    """ OPERATIONS ON OBJECTS """
-    def op_mult(self, other): pass
-    def op_div(self, other): pass
-    def op_add(self, other): pass
-    def op_sub(self, other): pass
-    def op_pow(self): pass
-    def op_eq(self): pass
-    def op_lt(self): pass
-    def op_lte(self): pass
-    def op_gt(self): pass
-    def op_gte(self): pass
-    def op_in(self): pass
-
-    """ OBJECT PROPERTIES """
-    def istrue(self): pass
-    def isnull(self): pass
-
-    """ LIST """
-    def getitem(self): pass
-    def additem(self): pass
-    def delitem(self): pass
-    def length(self): pass
-
-    def isfalse(self):
-        return not self.istrue()
-
-    def kill(self):
-        self.__del__()
-
-    def dynamic_package(self): pass
-
-    def __repr__(self):
-        return '<{}: {}, {} at {}>'.format(self.get_name(), self.obj_name, self.get_type(), id(self))
 
 class Null(IvyObject):
     def __init__(self):
@@ -706,7 +729,7 @@ class Parser(IvyObject):
     def get_token(self):
         self.idtoken += 1
         self.ctoken = self.tokens[self.idtoken]
-        if self.ctoken.type = TokenType.EOF:
+        if self.ctoken.type == TokenType.EOF:
             return False
 
 """ Data Objects """
@@ -771,7 +794,7 @@ class FunctionCall:
 
 class Return:
     def __init__(self, toret):
-        self.return = toret
+        self.toreturn = toret
 
 """ Operators """
 class BinaryOperator:
@@ -799,9 +822,9 @@ class WhileLoop:
         self.retnull = retnull
 
 class ForLoop:
-    def __init__(self, var, from, to, step, body, retnull):
+    def __init__(self, var, fromv, tov, step, body, retnull):
         self.variable = var
-        self.from = from
+        self.fromv = fromv
         self.to = to
         self.step = step
         self.body = body
@@ -865,6 +888,13 @@ class Interpreter():
         ar[var_name] = var_value
 
 """
+*** SYSTEM CONSTANTS
+"""
+SYSTEM_LOG_SCOPE = False
+SYSTEM_LOG_CALLS = False
+SYSTEM_LOG_TRACES = False
+
+"""
 *** Ivy System
 """
 
@@ -872,23 +902,100 @@ class System(IvyObject):
 
     def __init__(self):
         super().__init__(self)
-        self.objdef.update({
-            'stdin': sys.stdin,
-            'stdout': sys.stdout,
-            'stderr': sys.stderr,
-        })
+        self.stdin = sys.stdin
+        self.stdout = sys.stdout
+        self.stderr = sys.stderr
+        self._trace = TraceStack()
+        self._lexer = Lexer(self._trace)
+
+    def tokenizefile(self, path):
+        self._lexer.load(self.createfile(path))
+        self.tokenized(self.readfile(path))
+
+    def createfile(self, path):
+        fn, fp, content = self.readfile(path)
+        file = File(fn, fp, content)
+        return file
+
+    def tokenized(self, contents):
+        for i in self._lexer.tokenize():
+            print(i)
+
+    def readfile(self, path):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        abs_file_path = os.path.join(script_dir, path)
+        if os.path.exists(abs_file_path):
+            full_path = abs_file_path
+        else:
+            full_path = path
+        try:
+            self.filepath = full_path
+            self.filename = full_path.split('/')[-1]
+            yield self.filename
+            yield full_path
+            with open(full_path, 'r') as content_file:
+                content = content_file.read()
+                yield content
+        except IOError:
+            print(IvyIOError('No such file found', None))
+
+    def runfile(self, path):
+        file = self.createfile(path)
+
+    def run_code(self, prog): pass
 
     def push_error(self): pass
 
-    def dynamic_package(self): pass
+    def dynamic_package(self):
+        return
 
+"""
+*** Main Ivy Console
+*** Provides access to System()
+"""
 class IvyConsole:
+
     def __init__(self):
-        pass
+        self._system = System()
+
+    def main(self):
+        """ Define the arguments for the console """
+        parser = argparse.ArgumentParser(description='Ivy Language Console')
+        parser.add_argument('-f', '--file', default=False, help='Execute Ivy Source File')
+        parser.add_argument('-p', '--repl', default=False, action='store_true', help='Ivy Language Read-Eval-Print loop')
+        parser.add_argument('-t', '--tokenize', default=False, help='Tokenize a source file')
+        parser.add_argument('--traces', action='store_true', help='Print the trace stack of the program')
+        parser.add_argument('--calls', action='store_true', help='Print the call stack of the program')
+        parser.add_argument('--scope', action='store_true', help='Print scope info about the program')
+        args = parser.parse_args()
+
+        """ Set console info constants """
+        global SYSTEM_LOG_SCOPE, SYSTEM_LOG_CALLS, SYSTEM_LOG_TRACES
+        SYSTEM_LOG_SCOPE, SYSTEM_LOG_CALLS, SYSTEM_LOG_TRACES = args.scope, args.calls, args.traces
+
+        """ Execute system commands """
+        if len(sys.argv) == 1:
+            self.repl()
+        elif args.tokenize:
+            self._system.tokenizefile(args.tokenize)
+        elif not args.f and args.p:
+            self.repl()
+        elif args.f:
+            self._system.runfile(args.f)
+        else:
+            parser.print_help(sys.stderr)
+            sys.exit(1)
+
+    def run(self, program):
+        self._system.run_code(program)
+
+    def repl(self):
+        """ The REPL """
+        print("Ivy Language REPL.")
+        while True:
+            getin = input("ivy> ")
+            self.run(str(getin))
 
 if __name__ == '__main__':
-    program = 'if this and that -> {\n "Altun  }'
-    fl = File('<stdin>', '.', program)
-    pars = Parser(fl)
-    for i in pars.tokens:
-        print(i)
+    ivy = IvyConsole()
+    ivy.main()
