@@ -411,7 +411,6 @@ class Lexer(object):
             result += self.current_char
             self.advance()
         if self.current_char == '.' and self.peek().isdigit():
-            print("i'm doing it")
             result += self.current_char
             self.advance()
             while self.current_char != None and self.current_char.isdigit():
@@ -948,13 +947,11 @@ class Parser(object):
             self.eatdef(TokenType.S_QUOTE)
             res= String(string)
         elif self.match(TokenType.LPAREN):
-            print("do lp aren ex")
             res= self.expression()
             if not self.match(TokenType.RPAREN):
                 self.error(mes='Expected a closing parantheses `)` to finish expression')
         else:
             do_attr=True
-            print("before call" + str(self.ctoken))
             res = self.eat_call()
             if res == False:
                 self.error(token)
@@ -1033,33 +1030,29 @@ class Parser(object):
                     self.error('Expected a closing parantheses')
                 if not self.current(TokenType.LBRACK):
                     self.error('Expected a block to define anonymous function')
-                print("get block")
-                print("before block" + str(self.ctoken))
                 block = self.eat_block()
-                print("after block" + str(self.ctoken))
                 return Function(params=list_decl, code=block)
 
     """ STATEMENTS """
     def statement(self):
-        print("starting statement")
         token = self.ctoken
         res = self.eat_assignment()
-        if self.match(TokenType.PRINT):
-            expr = self.expression()
-            res = PrintStatement(expr)
-        elif self.match(TokenType.PACKAGE):
-            id = self.eat_id()
-            res = PackageDeclaration(id)
-        elif self.match(TokenType.IMPORT):
-            id = self.eat_id()
-            res = ImportStatement(id)
-        elif self.match(TokenType.BREAK):
-            res = BreakLoop(token)
-        elif self.match(TokenType.CONTINUE):
-            res = ContinueLoop(token)
-        else:
-            res = self.expression()
-        print("statement finished " + str(self.ctoken))
+        if not res:
+            if self.match(TokenType.PRINT):
+                expr = self.expression()
+                res = PrintStatement(expr)
+            elif self.match(TokenType.PACKAGE):
+                id = self.eat_id()
+                res = PackageDeclaration(id)
+            elif self.match(TokenType.IMPORT):
+                id = self.eat_id()
+                res = ImportStatement(id)
+            elif self.match(TokenType.BREAK):
+                res = BreakLoop(token)
+            elif self.match(TokenType.CONTINUE):
+                res = ContinueLoop(token)
+            else:
+                res = self.expression()
         semicolon = self.match(TokenType.SEMICOLON)
         if not semicolon:
             self.error(mes='Expected a `;` to finish statement')
@@ -1074,12 +1067,10 @@ class Parser(object):
     """ SYNTAX EATERS """
     def eat_assignment(self):
         if self.ctoken.type == TokenType.IDENTIFIER or self.ctoken.value in TYPE_MAP.keys():
-            print("doing assignment")
             if self.peek_match(TokenType.IDENTIFIER, 1):
                 type, id = self.eat_declaration()
                 if self.match(TokenType.EQUALS):
                     if self.ctoken.type == TokenType.FUNCTION:
-                        print('do fuc as')
                         expr = self.function_expression()
                         return VariableAssignment(type, id, expr)
                     return VariableAssignment(type, id, self.expression())
@@ -1104,7 +1095,7 @@ class Parser(object):
         token = self.ctoken # Identifier
         if self.match(TokenType.IDENTIFIER):
             if self.match(TokenType.LPAREN):
-                expr = self.eat_list_expression()
+                expr = None #self.eat_list_expression()
                 if self.match(TokenType.RPAREN):
                     return FunctionCall(token, expr)
                 self.error(mes='Expected a closing paranthesis to finish function call')
@@ -1133,13 +1124,11 @@ class Parser(object):
             if self.ctoken.type == TokenType.IDENTIFIER:
                 params = [self.eat_type(), self.eat_id()]
                 while self.match(TokenType.COMMA):
-                    print("doing suc")
                     params.append(Param(self.eat_type(), self.eat_id()))
                 if self.match(TokenType.COMMA): pass
         return params
 
     def eat_declaration(self):
-        print("doing declaration")
         type = self.eat_type()
         id = self.eat_id()
         return type, id
@@ -1154,11 +1143,8 @@ class Parser(object):
 
     def eat_funcblock(self):
         if self.match(TokenType.FUNCTION):
-            print("func block")
             if self.match(TokenType.LPAREN):
-                print("open paren")
                 params = self.eat_list_decl()
-                print("eat list")
                 if not self.match(TokenType.RPAREN):
                     self.error(mes='Expected a closing parantheses')
                 block = self.eat_block()
@@ -1177,20 +1163,17 @@ class Parser(object):
         no_else = True
         token = self.ctoken
         if self.match(TokenType.IF):
-            print("look if")
             if_elif = True
             expr = self.expression()
             block = self.eat_block()
             conds.append((expr, block))
         while self.match(TokenType.ELIF):
-            print("look elif")
             if not if_elif:
                 self.error(token, mes='Unexpected token for conditional')
             expr = self.expression()
             block = self.eat_block()
             conds.append((expr, block))
         if self.match(TokenType.ELSE):
-            print("look else")
             if not if_elif:
                 self.error(token, mes='Unexpected token for conditional')
             block = self.eat_block()
@@ -1206,15 +1189,12 @@ class Parser(object):
             cond = conds[-1][1]
         for i in range(len(conds)-2,0,-1):
             cond = Conditional(conds[i][0], conds[i][1], cond)
-        print(cond)
         return cond
 
     """ PROGRAM """
     def program(self, endtok=TokenType.EOF):
         prog = [self.eat_program()]
-        print("first program " + str(self.ctoken))
         while self.ctoken.type != endtok:
-            print("do program" + str(self.ctoken))
             prog.append(self.eat_program())
         return prog
 
@@ -1239,7 +1219,6 @@ class Symbol:
         self.name = name
         self.type = type
 
-
 class VarSymbol(Symbol):
     def __init__(self, name, type):
         super().__init__(name, type)
@@ -1253,7 +1232,6 @@ class VarSymbol(Symbol):
 
     __repr__ = __str__
 
-
 class BuiltinTypeSymbol(Symbol):
     def __init__(self, name):
         super().__init__(name)
@@ -1266,7 +1244,6 @@ class BuiltinTypeSymbol(Symbol):
             class_name=self.__class__.__name__,
             name=self.name,
         )
-
 
 class ProcedureSymbol(Symbol):
     def __init__(self, name, params=None):
@@ -1282,7 +1259,6 @@ class ProcedureSymbol(Symbol):
         )
 
     __repr__ = __str__
-
 
 class ScopedSymbolTable:
     def __init__(self, scope_name, scope_level, enclosing_scope=None):
@@ -1374,7 +1350,7 @@ class Interpreter:
         return self.visit_Program(node)
 
     def visit_Function(self, node):
-        return self.viist(node.block)
+        return node
 
     def visit_Conditional(self, node):
         print("before")
@@ -1461,6 +1437,7 @@ class Interpreter:
 
     def visit_FunctionCall(self, node):
         func = self.env.get(node.variable.value)
+        return self.visit(func[1].block)
 
     def visit_AttributeCall(self, node):
         return self.visit(node.variable).attrget(node.attribute.value)

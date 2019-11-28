@@ -1,5 +1,11 @@
 func do = function() {
-    print 4;
+    int a = 27;
+    func main = function() {
+        a = 28;
+        print a;
+    };
 };
 
 do();
+print a;
+print main();
