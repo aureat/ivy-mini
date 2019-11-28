@@ -1,0 +1,5 @@
+func do = function() {
+    print 4;
+};
+
+do();
