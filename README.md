@@ -55,14 +55,9 @@ collection := [ list-expression ]
 
 expression := [binfactor] (and [binfactor])*
 binfactor := [binary] (or [binary])*
-<<<<<<< HEAD
 binary := [term] (( < | <= | > | >= | == | != | === | !== ) [term])?
 term := [factor] (( + | - ) [factor])*
 factor := [atom] (( * | / | % ) [atom])*
-=======
-binary := [term] ((< | <= | > | >= | == | ===) [term])?
-term := [factor] ((+|-) [factor])*
-factor := [atom] ((*|/|%) [atom])*
 atom := [number] | [string] | [function-call] | [attribute-call] | [index-call] | "(" __expression__ ")"
 
 type := __identifier__ | int | float | str | bool | coll | arr | dict | func
@@ -85,23 +80,23 @@ float := [0-9]*(.[0-9]+)? (TokenType.FLOAT_CONSTANT)
 boolean := true | false
 string := " [.*] " | ' [.*] '
 
-## TO-DO:
-[ ] Proper syntactical definition for unary not operation
-[ ] Complete object model
-[ ] Define binary operations on other objects
-[ ] If-Else Conditionals PERMENANT PATCH
-[ ] If-Elif conditionals without else blocks
-[ ] Parameters implementation and call stack creation for blocks
-[ ] Function-name storing for call stack
-[ ] Build a return statement for the functions
-[ ] Parameters for methods for objects
-[ ] Build semantic analyzer and symbol tables
-[ ] Type System Error checking
-[ ] System framework (system module name)
-[ ] Error handling framework based on call stack
-[ ] Error processing through trace stack: lexer, parser, interpreter
-[ ] Collection Data Type
-[ ] Local and global environment references
-[ ] Define types in memory, referencing python-implemented objects
-[ ] Handle type conversions
-[ ] Implement the system package
+## TO-DO
+- Proper syntactical definition for unary not operation
+- Complete object model
+- Define binary operations on other objects
+- If-Else Conditionals PERMENANT PATCH
+- If-Elif conditionals without else blocks
+- Parameters implementation and call stack creation for blocks
+- Function-name storing for call stack
+- Build a return statement for the functions
+- Parameters for methods for objects
+- Build semantic analyzer and symbol tables
+- Type System Error checking
+- System framework (system module name)
+- Error handling framework based on call stack
+- Error processing through trace stack: lexer, parser, interpreter
+- Collection Data Type
+- Local and global environment references
+- Define types in memory, referencing python-implemented objects
+- Handle type conversions
+- Implement the system package
