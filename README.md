@@ -36,7 +36,7 @@ print factorial(6);
 
 # Grammar
 ## Statements
-program := (__statement__ | [function-declaration] | [conditional] | [while-loop] | [for-loop])* \n
+program := (__statement__ | [function-declaration] | [conditional] | [while-loop] | [for-loop])*  
 list-statements := (statement)*
 
 conditional := if __expression__ __block__ (elif __expression__ __block__)* else __block__
