@@ -2,15 +2,21 @@
 A programming language written in python.
 
 # Features
-* Static Typing
+* Static Typing (will move to dynamic typing)
 * Expressions and Statements
 * Binary Operations
 * Conditional Control Flow
+* Ternary Conditional
 * Looping Control Flow
 * Functions
 * Anonymous Functions
 * Classes and constructors
-* "Everything is an object"
+* Methods
+
+## Technical Features
+* Statements are not evaluated to a value
+* Expressions are evaluated to a type object
+* Builtin-type objects: Null, Integer, Float, String, Boolean, Collection, Function
 
 # How to run
 * Run the `ivy` file to initialize the repl or type `python ivy.py -p` in terminal
@@ -20,10 +26,10 @@ e.g. `python ivy.py -f tests/conditional.ivy`
 # Example Programs
 ```
 func factorial = function(int n) {
-    if n > 2 {
+    if n > 1 {
         return n * factorial(n-1);
     }
-    return 2;
+    return n;
 }
 print factorial(6);
 ```
@@ -72,7 +78,7 @@ index-call := (__identifier__ | [collection]) "[" __expression__ "]"
 range := [integer] .. [integer]
 iteration := __identifier__ in ([range] | [collection])
 
-identifier := [a-zA-Z_]([a-zA-Z0-9_])*
+identifier := [a-zA-Z_] ( [a-zA-Z0-9_] )*
 number := (+|-| ) [integer] | [float]
 integer := [0-9]+ (TokenType.INTEGER_CONSTANT)
 float := [0-9]*(.[0-9]+)? (TokenType.FLOAT_CONSTANT)
@@ -80,10 +86,10 @@ boolean := true | false
 string := " [.*] " | ' [.*] '
 
 ## TO-DO:
-[ ] Negative numbers
-[ ] Not statements
+[ ] Proper syntactical definition for unary not operation
 [ ] Complete object model
 [ ] Define binary operations on other objects
+[ ] If-Else Conditionals PERMENANT PATCH
 [ ] If-Elif conditionals without else blocks
 [ ] Parameters implementation and call stack creation for blocks
 [ ] Function-name storing for call stack

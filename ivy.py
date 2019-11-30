@@ -520,6 +520,11 @@ class FunctionCall:
         self.variable = vartoken
         self.list_expr = lexpr
 
+class ReturnStatement:
+    def __init__(self, token, expr):
+        self.ret = token
+        self.expr = expr
+
 class BinaryOperator:
     def __init__(self, left, op, right):
         self.left = left
@@ -774,7 +779,12 @@ class Parser(object):
         token = self.ctoken
         res = self.eat_assignment()
         if not res:
-            if self.match(TokenType.PRINT):
+            if self.match(TokenType.RETURN):
+                expr = None
+                if not self.peek_match(TokenType.SEMICOLON):
+                    expr = self.expression()
+                res = ReturnStatement(token, expr)
+            elif self.match(TokenType.PRINT):
                 expr = self.expression()
                 res = PrintStatement(expr)
             elif self.match(TokenType.PACKAGE):
@@ -923,8 +933,6 @@ class Parser(object):
             cond = None
         else:
             cond = conds[-1][1]
-        print(cond)
-        print(conds)
         for i in range(len(conds)-2,0,-1):
             cond = Conditional(conds[i][0], conds[i][1], cond)
         return cond
@@ -938,7 +946,6 @@ class Parser(object):
 
     def eat_program(self):
         res = self.eat_conditional()
-        print(self.ctoken)
         if not res:
             res = self.statement()
         return res
@@ -1042,6 +1049,10 @@ class SemanticAnalyzer:
 """
 *** Main Interpreter
 """
+class Return:
+    def __init__(self, expr):
+        self.to_return = expr
+
 class Interpreter:
     def __init__(self, parser, callstack, file=None):
         self.file = file
@@ -1074,14 +1085,16 @@ class Interpreter:
 
     def visit_Block(self, node):
         for i in node.block:
-            self.visit(i)
+            exc = self.visit(i)
+            if isinstance(exc, Return):
+                return exc.to_return
 
     def visit_Function(self, node):
         return node
 
     def visit_Conditional(self, node):
         comp = self.visit(node.condition)
-        if comp:
+        if comp.istrue():
             return self.visit(node.ifblock)
         else:
             if node.elseblock is not None:
@@ -1135,11 +1148,11 @@ class Interpreter:
     def visit_UnaryOp(self, node):
         op = node.op.type
         if op == TokenType.PLUS:
-            return +self.visit(node.expr)
+            return self.visit(node.expr).op_plus()
         elif op == TokenType.MINUS:
-            return -self.visit(node.expr)
+            return self.visit(node.expr).op_minus()
         elif op == TokenType.NOT:
-            return not self.visit(node.expr)
+            return self.visit(node.expr).op_not()
 
     def visit_VariableDeclaration(self, node):
         var_type = node.type.type
@@ -1185,8 +1198,17 @@ class Interpreter:
             record[i[1].value] = (val.gettype(), val)
         self.callstack.push(record)
         call = self.visit(func.block)
+        print(self.callstack)
         self.callstack.pop()
+        if not call:
+            return Null()
         return call
+
+    def visit_ReturnStatement(self, node):
+        if self.callstack.peek().type != Rec.FUNCTION:
+            print("Return statement should be inside of a function")
+        to_return = self.visit(node.expr) if node.expr != None else Null()
+        return Return(to_return)
 
     def visit_AttributeCall(self, node):
         return self.visit(node.variable).attrget(node.attribute.value)

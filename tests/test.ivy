@@ -1,9 +1,1 @@
-int a = 42;
-int b = 43;
-if b > a and a + 1 > b {
-    // if the above condition holds
-    print "conditional works!";
-} elif a + 2 == 85 {
-    // if condition does not hold
-    print "the else";
-}
+print not not false;

@@ -148,7 +148,7 @@ class Null(IvyObject):
         return True
 
     def printable(self):
-        return 'Null'
+        return 'null'
 
 class DataObject(IvyObject):
     def __init__(self, obj_type, data_type=None, data=None):
@@ -239,6 +239,15 @@ class Integer(DataObject):
     def __init__(self, data):
         super().__init__(obj_type='Integer', data=data)
 
+    def op_plus(self):
+        return Integer(self.data)
+
+    def op_minus(self):
+        return Integer(-self.data)
+
+    def op_not(self):
+        self.undefined()
+
     def define_op(self, op, other, searchm=False):
         selfattr = getattr(self, 'op_'+op, False)
         if selfattr != False:
@@ -260,6 +269,15 @@ class Integer(DataObject):
 class Float(DataObject):
     def __init__(self, data):
         super().__init__(obj_type='Float', data=data)
+
+    def op_plus(self):
+        return Integer(self.data)
+
+    def op_minus(self):
+        return Integer(-self.data)
+
+    def op_not(self):
+        self.undefined()
 
     def define_op(self, op, other, searchm=False):
         selfattr = getattr(self, 'op_'+op, False)
@@ -284,6 +302,15 @@ class Float(DataObject):
 class String(DataObject):
     def __init__(self, data):
         super().__init__(obj_type='String', data=data)
+
+    def op_plus(self):
+        self.undefined()
+
+    def op_minus(self):
+        self.undefined()
+
+    def op_not(self):
+        self.undefined()
 
     def op_mult(self, other):
         if isinstance(other, Boolean):
@@ -355,6 +382,15 @@ class Boolean(DataObject):
         else:
             booldata = 0
         super().__init__(obj_type='Boolean', data=booldata)
+
+    def op_plus(self):
+        self.undefined()
+
+    def op_minus(self):
+        self.undefined()
+
+    def op_not(self):
+        return Boolean(not bool(self.data))
 
     def op_and(self, other):
         return Boolean(bool(self.data) and bool(other.data))
