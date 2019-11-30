@@ -2,6 +2,11 @@
 ***  IVY Language Interpreter
 ***  Main Class
 
+(c) Altun Hasanli 2019
+
+"""
+
+"""
 TO DO:
 ( ) Start the parser and the Interpreter
 ( ) Where do lexer objects belong to? Parser vs Interpreter
