@@ -57,7 +57,6 @@ factor := [atom] (( * | / | % ) [atom])*
 binary := [term] ((< | <= | > | >= | == | ===) [term])?
 term := [factor] ((+|-) [factor])*
 factor := [atom] ((*|/|%) [atom])*
->>>>>>> e75d15a0c47c94f7f41ae91c3c8b173fc4614fc9
 atom := [number] | [string] | [function-call] | [attribute-call] | [index-call] | "(" __expression__ ")"
 
 type := __identifier__ | int | float | str | bool | coll | arr | dict | func
@@ -81,7 +80,6 @@ boolean := true | false
 string := " [.*] " | ' [.*] '
 
 ## TO-DO:
-<<<<<<< HEAD
 [ ] Negative numbers
 [ ] Not statements
 [ ] Complete object model
@@ -101,6 +99,3 @@ string := " [.*] " | ' [.*] '
 [ ] Define types in memory, referencing python-implemented objects
 [ ] Handle type conversions
 [ ] Implement the system package
-=======
-[]
->>>>>>> e75d15a0c47c94f7f41ae91c3c8b173fc4614fc9
