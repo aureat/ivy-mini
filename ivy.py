@@ -505,6 +505,7 @@ class MethodCall:
     def __init__(self, vartoken, attrtoken, params):
         self.variable = vartoken
         self.method = attrtoken
+        self.params = params
 
 class IndexCall:
     def __init__(self, vartoken, indextoken):
@@ -679,7 +680,7 @@ class Parser(object):
         elif self.match(TokenType.S_QUOTE):
             string = self.eatdef(TokenType.STRING_CONST)
             self.eatdef(TokenType.S_QUOTE)
-            res= String(string)
+            res= String(string.value)
         elif self.match(TokenType.LPAREN):
             res= self.expression()
             if not self.match(TokenType.RPAREN):
@@ -695,7 +696,7 @@ class Parser(object):
                 attr = self.ctoken
                 if self.match(TokenType.IDENTIFIER):
                     if self.match(TokenType.LPAREN):
-                        params = None
+                        params = self.eat_list_expression()
                         if self.match(TokenType.RPAREN):
                             res = MethodCall(res, attr, params)
                             continue
@@ -1164,12 +1165,16 @@ class Interpreter:
         type = node.type.type
         id = node.id.value
         value = self.visit(node.value)
+        if isinstance(value, Function):
+            value.name = id
         record = self.callstack.peek()
         record[id] = (type, value)
 
     def visit_Assignment(self, node):
         id = node.id.value
         value = self.visit(node.value)
+        if isinstance(value, Function):
+            value.name = id
         record = self.callstack.peek()
         if record[id] != False:
             record[id] = (record[id][0], value)
@@ -1189,8 +1194,8 @@ class Interpreter:
         func = cur_record[node.variable.value]
         if not func:
             print("function not found")
-        record = self.callstack.copy(Record('func', Rec.FUNCTION, cur_depth+1))
         func = func[1]
+        record = self.callstack.copy(Record(func.name, Rec.FUNCTION, cur_depth+1))
         if len(func.params) != len(node.list_expr):
             print("Number of arguments given to funciton do not match number of declared parameters")
         for n, i in enumerate(func.params):
@@ -1198,7 +1203,6 @@ class Interpreter:
             record[i[1].value] = (val.gettype(), val)
         self.callstack.push(record)
         call = self.visit(func.block)
-        print(self.callstack)
         self.callstack.pop()
         if not call:
             return Null()
@@ -1214,9 +1218,11 @@ class Interpreter:
         return self.visit(node.variable).attrget(node.attribute.value)
 
     def visit_MethodCall(self, node):
-        met = self.visit(node.variable).getmethod(node.method.value)
+        metval = self.visit(node.variable)
+        met = metval.getmethod(node.method.value)
+        params = ','.join([str(i.data) for i in node.params]) if node.params != [False] else ''
         if not isinstance(met, Boolean):
-            return met()
+            return eval('met({})'.format(params))
 
     def interpret(self):
         tree = self.tree
@@ -1249,7 +1255,8 @@ class System:
         self._trace = TraceStack()
         self._callstack = CallStack()
 
-        self.system = Record('system', Rec.SYSTEM, 0)
+        self.system = Record('<system>', Rec.SYSTEM, 0)
+        self._callstack.push(self.system)
 
         """ Main System Objects """
         self._lexer = Lexer(self._trace)
@@ -1333,7 +1340,7 @@ class IvyConsole:
         parser.add_argument('--scope', action='store_true', help='Print scope info about the program')
         args = parser.parse_args()
 
-        """ Set console info constants """
+        """ Set console information """
         global SYSTEM_LOG_SCOPE, SYSTEM_LOG_CALLS, SYSTEM_LOG_TRACES
         SYSTEM_LOG_SCOPE, SYSTEM_LOG_CALLS, SYSTEM_LOG_TRACES = args.scope, args.calls, args.traces
 
@@ -1355,6 +1362,7 @@ class IvyConsole:
     def repl(self):
         """ The REPL """
         print("Ivy Language REPL.")
+        print("Version 1.0")
         while True:
             getin = input("ivy> ")
             self.run(str(getin))

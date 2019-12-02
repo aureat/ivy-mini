@@ -22,7 +22,9 @@ OPMAP = {
     'op_not': lambda x: not x,
     'op_in': lambda x,y: x in y,
     'op_ideq': lambda x,y: type(x) == type(y),
-    'op_ideq_not': lambda x,y: type(x) != type(y)
+    'op_ideq_not': lambda x,y: type(x) != type(y),
+    'op_minus': lambda x: -x,
+    'op_plus': lambda x: +x,
 }
 
 """ OBJECT CLASSES """
@@ -140,7 +142,7 @@ class Null(IvyObject):
     def __init__(self):
         super().__init__(obj_type='Null')
 
-    def define_op(self, op, other):
+    def define_op(self, op, other, searchm=False):
         if 'op_'+op in OPMAP.keys():
             print("No binary operation on a Null object is allowed")
 
@@ -248,6 +250,9 @@ class Integer(DataObject):
     def op_not(self):
         self.undefined()
 
+    def istrue(self):
+        return Boolean(True) if abs(self.data) > 0 else Boolean(False)
+
     def define_op(self, op, other, searchm=False):
         selfattr = getattr(self, 'op_'+op, False)
         if selfattr != False:
@@ -278,6 +283,9 @@ class Float(DataObject):
 
     def op_not(self):
         self.undefined()
+
+    def istrue(self, other):
+        return Boolean(True) if abs(self.data) > 0 else Boolean(False)
 
     def define_op(self, op, other, searchm=False):
         selfattr = getattr(self, 'op_'+op, False)
@@ -311,6 +319,9 @@ class String(DataObject):
 
     def op_not(self):
         self.undefined()
+
+    def istrue(self):
+        return Boolean(True) if len(self.data) > 0 else Boolean(False)
 
     def op_mult(self, other):
         if isinstance(other, Boolean):
@@ -460,8 +471,9 @@ class Array(DataObject):
         super().__init__(obj_type='arr', data=data)
 
 class Function(IvyObject):
-    def __init__(self, params, code):
+    def __init__(self, params, code, name='<Function>'):
         super().__init__(obj_type='Function')
+        self.name = name
         self.params = params
         self.block = code
         self.objdef.update({

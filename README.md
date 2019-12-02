@@ -13,15 +13,11 @@ A programming language written in python.
 * Classes and constructors
 * Methods
 
-## Technical Features
-* Statements are not evaluated to a value
-* Expressions are evaluated to a type object
-* Builtin-type objects: Null, Integer, Float, String, Boolean, Collection, Function
-
-# How to run
+# How to use the console
 * Run the `ivy` file to initialize the repl or type `python ivy.py -p` in terminal
 * To run ivy test files type `python ivy.py -f [filename]` in terminal
 e.g. `python ivy.py -f tests/conditional.ivy`
+* To tokenize a file run `python ivy.py -t [filename]`
 
 # Example Programs
 ```
@@ -30,13 +26,19 @@ func factorial = function(int n) {
         return n * factorial(n-1);
     }
     return n;
-}
+};
 print factorial(6);
 ```
 
-# Grammar
-## Statements
-program := (__statement__ | [function-declaration] | [conditional] | [while-loop] | [for-loop])*  
+# Technical Specifications
+## Features
+* Builtin-type objects: Null, Integer, Float, String, Boolean, Collection, Function
+* All literals are resolved into a builtin-type object
+* Statements are not evaluated to a value
+* Expressions are evaluated to a type object
+
+## Grammar
+`program := (__statement__ | [function-declaration] | [conditional] | [while-loop] | [for-loop])*
 list-statements := (statement)*
 
 conditional := if __expression__ __block__ (elif __expression__ __block__)* else __block__
@@ -78,10 +80,11 @@ number := (+|-| ) [integer] | [float]
 integer := [0-9]+ (TokenType.INTEGER_CONSTANT)
 float := [0-9]*(.[0-9]+)? (TokenType.FLOAT_CONSTANT)
 boolean := true | false
-string := " [.*] " | ' [.*] '
+string := " [.*] " | ' [.*] '`
 
 ## TO-DO
-- Proper syntactical definition for unary not operation
+- Fix AND/OR binary operations
+- Proper syntactical definition for unary not operation (ex. not 16 > 2 etc..)
 - Complete object model
 - Define binary operations on other objects
 - If-Else Conditionals PERMENANT PATCH

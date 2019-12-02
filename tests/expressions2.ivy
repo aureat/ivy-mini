@@ -1,0 +1,6 @@
+print 16 > 2 and 34 < 25;
+print 16 > 2 or 34 < 25;
+print not 16 > 2;
+print not true;
+print not false;
+print 16 < 2 or 7 == 7 and 12 == 12 or 27 < 9;
