@@ -1,6 +1,6 @@
 """
 ***  IVY Language Interpreter
-***  Main Class
+***  Main File
 
 (c) Altun Hasanli 2019
 
@@ -10,605 +10,114 @@ import os
 import sys
 import argparse
 from enum import Enum
-import string
 
 """
 *** SYSTEM OBJECTS
 """
-from objects import IvyObject, Null, DataObject, Integer, Float, String, Boolean, TrueBoolean, FalseBoolean, Collection, Dictionary, Array, Function, Block, CodeObject
-
-"""
-*** ERROR Objects
-"""
-
-class ErrorCode(Enum):
-    UNEXPECTED_TOKEN = 'Unexpected token'
-    ID_NOT_FOUND = 'Identifier not found'
-    STRING_NOT_CLOSED = 'String not completed'
-
-class Error(IvyObject):
-    def __init__(self, desc, name, trace=None, token=None, type=None):
-        super().__init__()
-        self.objdef.update({
-            'error_name': name,
-            'error_details': desc,
-            'error_token': token,
-            'error_trace': trace,
-            'error_type': type})
-
-    def get_error(self):
-        error = '\nTraceback:\n'
-        for i in self.attrget('error_trace').get_trace():
-            line = i['line_content']
-            char = i['col']
-            trace_beg = min(30,len(line[:char]))
-            trace_end = min(30,len(line[char:]))
-            error += '   ' + str(i['filepath']) + '\n'
-            error += '   File {}, line {} (col. {}) in {}\n'.format(i['filename'], i['line']+1, i['col']+1, i['name'])
-            error += '\t' + line[char-trace_beg:char+trace_end] + '\n'
-            if i['col'] or i['col'] == 0:
-                error += '\t' + " " * i['col'] + '^\n'
-                error += '{}: {}\n'.format(self.objdef['error_name'], self.objdef['error_details'])
-        return error
-
-    def __repr__(self):
-        self.get_error()
-
-    def __str__(self):
-        self.get_error()
-
-class IvySyntaxError(Error):
-    def __init__(self, desc, trace=None):
-        super().__init__(desc, 'SyntaxError', trace)
-
-class IvyParseError(Error):
-    def __init__(self, desc, trace=None):
-        super().__init__(desc, 'ParseError', trace)
-
-class IvyLexerError(Error):
-    def __init__(self, desc, trace=None):
-        super().__init__(desc, 'LexerError', trace)
-
-class IvyIOError(Error):
-    def __init__(self, desc, file=None):
-        self.file = file
-        super().__init__(desc, 'IOError', trace=None)
-
-    def get_error(self, file):
-        mes = self.attrget('error_details')
-        fn = file.name
-        return 'File ' + fn + ' with path ' + file.path + ' not found.'
-
-    def __str__(self):
-        return self.get_error(self.file)
-
-    def __repr__(self):
-        return self.__str__()
-
-class IvyTypeError(Error):
-    def __init__(self, desc, trace=None):
-        super().__init__(desc, 'TypeError', trace)
-
-"""
-*** Token and TokenType Clases
-"""
-
-class TokenType(Enum):
-    # SINGLE CHARACTER
-    PLUS = '+'
-    MINUS = '-'
-    MUL = '*'
-    FLOAT_DIV = '/'
-    MOD = '%'
-    LPAREN = '('
-    RPAREN = ')'
-    SEMICOLON = ';'
-    DOT = '.'
-    COLON = ':'
-    COMMA = ','
-    EQUALS = '='
-    COMP_LT = '>'
-    COMP_GT = '<'
-    EXCLAMATION = '!'
-    L_SQ_BRACK = '['
-    R_SQ_BRACK = ']'
-    LBRACK = '{'
-    RBRACK = '}'
-    S_QUOTE = "'"
-    D_QUOTE = '"'
-    # TWO CHARACTERS
-    POWER = '**'
-    COMP_EQ = '=='
-    COMP_LTE = '>='
-    COMP_GTE = '<='
-    COMP_EQ_NOT = '!='
-    FROM_TO = '->'
-    COMP_IN = 'in'
-    TWO_DOTS = '..'
-    # THREE CHARACTERS
-    ELLIPSIS = '...'
-    COMP_ID = '==='
-    COMP_ID_NOT = '!=='
-    # IMPORTING AND MANAGEMENT
-    PACKAGE = 'package'
-    IMPORT = 'import'
-    USE = 'use'
-    GLOBAL = 'global'
-    # Helper
-    PRINT = 'print'
-    # DATA & TYPES
-    BOOLEAN = 'bool'
-    INTEGER = 'int'
-    FLOAT = 'float'
-    STRING = 'str'
-    COLLECTION = 'coll'
-    ARRAY = 'arr'
-    FUNC = 'func'
-    FUNCTION = 'function'
-    STRUCT = 'struct'
-    # DATA
-    TRUE = 'true'
-    FALSE = 'false'
-    NULL = 'null'
-    # CONTROL FLOW
-    IF = 'if'
-    ELSE = 'else'
-    ELIF = 'elif'
-    RETURN = 'return'
-    AND = 'and'
-    OR = 'or'
-    NOT = 'not'
-    # LOOP
-    WHILE = 'while'
-    FOR = 'for'
-    BREAK = 'break'
-    CONTINUE = 'continue'
-    # TYPE & EOF
-    IDENTIFIER = 'IDENTIFIER'
-    INTEGER_CONST = 'INTEGER_CONST'
-    FLOAT_CONST = 'FLOAT_CONST'
-    STRING_CONST = 'STRING_CONST'
-    BOOLEAN_CONST = 'BOOLEAN_CONST'
-    EOF = 'EOF'
-
-class Token:
-    def __init__(self, type=None, value=None, line=0, col=0):
-        self.type = type
-        self.value = value
-        self.line = line
-        self.col = col
-        self.length = len(value) if value is not None else None
-
-    def copypos(self):
-        return (self.line, self.col)
-
-    def __str__(self):
-        return 'Token({type}, {value}, pos={line}:{col})'.format(type=self.type, value=str(self.value), line=self.line+1, col=self.col+1)
-
-    def __repr__(self):
-        return self.__str__()
-
-"""
-*** FILES AND PACKAGES
-"""
-
-class Package: pass
-
-class DynamicPackage(Package): pass
-
-class File:
-    def __init__(self, name, path, content, package=None):
-        self.name = name
-        self.path = path
-        self.content = content
-        self.package = package
-
-    def split_lines(self):
-        return self.content.split('\n')
-
-    def get_line(self, ind):
-        return self.split_lines()[ind]
-
-class Module:
-    def __init__(self, name=None):
-        self.name = name if name is not None else '<main>'
-
-"""
-*** Lexer Tools Generation
-"""
-
-def language_keywords():
-    token_types = list(TokenType)
-    ind_start = token_types.index(TokenType.PACKAGE)
-    ind_end = token_types.index(TokenType.CONTINUE)
-    retdict = {token_type.value: token_type for token_type in token_types[ind_start:ind_end+1]}
-    return retdict
-
-"""
-*** LEXER CONSTANTS
-"""
-ASCII_LETTERS = string.ascii_letters
-DIGITS = string.digits
-ALPHA_NUMERIC = ASCII_LETTERS + DIGITS
-RESERVED_KEYWORDS = language_keywords()
-SINGLE_TOKENS = ['+', '/', '%', '(', ')', ';', ':', ',', '[', ']', '{', '}']
-TERM_TOKENS = ['+','-','*','/','%','!','=','>','<','.',',']
-
-"""
-*** LEXER AND TOKENIZER
-"""
-class Lexer(object):
-
-    def __init__(self, trace, file=None):
-        self.trace = trace
-        if file is not None:
-            self.load(file)
-
-    def load(self, file):
-        self.file = file
-        self.program = file.content
-        self.pos = 0
-        self.current_char = self.program[self.pos]
-        self.line = 0
-        self.col = 0
-        self.current_token = None
-
-    def error(self, mes, tok):
-        self.trace.add_trace(self.file, tok)
-        err = IvyLexerError(mes, self.trace)
-        output = err.get_error()
-        print(output)
-        quit()
-
-    def advance(self):
-        if self.current_char == '\n':
-            self.line += 1
-            self.col = 0
-        self.pos += 1
-        if self.pos > len(self.program) - 1:
-            self.current_char = None
-        else:
-            self.current_char = self.program[self.pos]
-            self.col += 1
-
-    def peek(self, more=0):
-        peek_pos = self.pos + 1 if more==0 else self.pos + 2
-        if peek_pos > len(self.program) - 1:
-            return None
-        else:
-            return self.program[peek_pos]
-
-    def match(self, char):
-        if self.pos <= len(self.program) - 1:
-            if self.current_char == char:
-                self.advance()
-                return True
-        return False
-
-    def skip_whitespace(self):
-        while self.current_char != None and self.current_char.isspace():
-            self.advance()
-
-    def skip_comment(self):
-        while self.current_char != '\n':
-            self.advance()
-
-    def eat_number(self):
-        token = Token(line=self.line, col=self.col)
-        result = ''
-        while self.current_char != None and self.current_char.isdigit():
-            result += self.current_char
-            self.advance()
-        if self.current_char == '.' and self.peek().isdigit():
-            result += self.current_char
-            self.advance()
-            while self.current_char != None and self.current_char.isdigit():
-                result += self.current_char
-                self.advance()
-            token.type = TokenType.FLOAT_CONST
-            token.value = float(result)
-        else:
-            token.type = TokenType.INTEGER_CONST
-            token.value = int(result)
-        return token
-
-    def is_idchar(self, char):
-        if char.isalpha() or char == '_':
-            return True
-        return False
-
-    def eat_id(self):
-        token = Token(line=self.line, col=self.col)
-        value = ''
-        if self.is_idchar(self.current_char):
-            value += self.current_char
-            self.advance()
-        while self.current_char != None and self.is_idchar(self.current_char):
-            value += self.current_char
-            self.advance()
-        token_type = RESERVED_KEYWORDS.get(value)
-        if token_type is None:
-            token.type = TokenType.IDENTIFIER
-            token.value = value
-        else:
-            token.type = token_type
-            token.value = value
-        return token
-
-    def eat_string(self, quote):
-        value = ''
-        while self.current_char != None and self.current_char != quote:
-            value += self.current_char
-            self.advance()
-        return value
-
-    def rtoken(self, tok, val):
-        # if self.current_char != None and self.current_char in TERM_TOKENS:
-        #     self.error('Unexpected token', tok)
-        tok.type = TokenType(val)
-        tok.value = val
-        return tok
-
-    def get_token(self):
-        while self.current_char != None:
-            if self.current_char.isspace():
-                self.skip_whitespace()
-                continue
-            if self.current_char == '/' and self.peek() == '/':
-                self.advance()
-                self.advance()
-                self.skip_comment()
-                continue
-            tok = Token(line=self.line, col=self.col)
-            for q in ['\'', '"']:
-                if self.match(q):
-                    str_tok = Token(line=self.line,col=self.col)
-                    string = self.eat_string(q)
-                    str_tok.type = TokenType.STRING_CONST
-                    str_tok.value = string
-                    tok2 = Token(line=self.line, col=self.col)
-                    if self.match(q):
-                        return self.rtoken(tok, q), str_tok, self.rtoken(tok2, q)
-                    else:
-                        self.error('Expected a `' + q + '` to finish string literal', tok2)
-            if self.is_idchar(self.current_char):
-                return self.eat_id()
-            elif self.current_char.isdigit():
-                return self.eat_number()
-            if self.match('='):
-                if self.match('='):
-                    if self.match('='):
-                        return self.rtoken(tok, '===')
-                    return self.rtoken(tok, '==')
-                return self.rtoken(tok, '=')
-            if self.match('-'):
-                if self.match('>'):
-                    return self.rtoken(tok, '->')
-                return self.rtoken(tok, '-')
-            if self.match('*'):
-                if self.match('*'):
-                    return self.rtoken(tok, '**')
-                return self.rtoken(tok, '*')
-            if self.match('>'):
-                if self.match('='):
-                    return self.rtoken(tok, '>=')
-                return self.rtoken(tok, '>')
-            if self.match('<'):
-                if self.match('='):
-                    return self.rtoken(tok, '<=')
-                return self.rtoken(tok, '<')
-            if self.match('!'):
-                if self.match('='):
-                    if self.match('='):
-                        return self.rtoken(tok, '!==')
-                    return self.rtoken(tok, '!=')
-                return self.rtoken(tok, '!')
-            if self.match('.'):
-                if self.match('.'):
-                    if self.match('.'):
-                        return self.rtoken(tok, '...')
-                    return self.rtoken(tok, '..')
-                return self.rtoken(tok, '.')
-            for i in SINGLE_TOKENS:
-                if self.match(i):
-                    return self.rtoken(tok, i)
-            if self.current_char != None:
-                self.error('Unexpected token', tok)
-        return Token(type=TokenType.EOF, value=None, line=self.line, col=self.col)
-
-    def tokenize(self):
-        tokens = []
-        tok = self.get_token()
-        token = [i for i in tok] if type(tok) == tuple else [tok]
-        while token[0].type!=TokenType.EOF:
-            tokens += token
-            tok = self.get_token()
-            token = [i for i in tok] if type(tok) == tuple else [tok]
-        tokens += token
-        return tokens
+from objects import *
+from error import Error, IvySyntaxError, IvyParseError, IvyLexerError, IvyIOError, IvyTypeError
+from lexer import Lexer
+from tokentype import TokenType
+from ast import *
 
 """
 *** Trace Stack
 """
-class TraceStack(IvyObject):
+
+class Trace(Enum):
+    READFILE = 'Reading file'
+    TOKENIZEFILE = 'Tokenizing file'
+    PARSEFILE = 'Parsing file'
+    INTERPRETFILE = 'Interpreting file'
+    CALLFUNC = 'Calling function'
+    RETURNFUNC = 'Returning function'
+    CREATEOBJ = 'Creating Ivy Object'
+    ENTERSCOPE = 'Entering scope'
+    CLOSESCOPE = 'Closing scope'
+    LOOKUPSYM = 'Looking up a symbol'
+    STORESYM = 'Storing a symbol'
+
+class SystemTrace():
     def __init__(self):
-        super().__init__(self)
-        self.objdef.update({
-            'trace': []
-        })
+        self.trace = []
 
-    def add_trace(self, file, token):
-        self.objdef['trace'].append({
-            'file': file,
-            'token': token,
-            'module': Module()
-        })
+    def add(self, type, framename=None, filepath=None, file=None, token=None):
+        trace = {'type': type, 'name': framename, 'filepath': filepath, 'file': file, 'token': token}
+        self.trace.append(trace)
 
-    def get_trace(self):
-        trace = []
-        for i in self.objdef['trace']:
-            trace.append({
-                'filename': i['file'].name,
-                'filepath': i['file'].path,
-                'content': i['file'].content,
-                'line_content': i['file'].get_line(i['token'].line),
-                'line': i['token'].line,
-                'col': i['token'].col,
-                'name': i['module'].name,
-            })
-        return trace
+    def peek(self):
+        return self.trace[-1]
+
+    def pop(self):
+        self.trace.pop()
+
+    def __repr__(self):
+        return '\n'.join([str(i) for i in self.trace])
 
 class SystemConstants(Enum):
     SYSTEM_BUILTINS = ['length', 'type', 'repr', 'name', 'obj', 'objdef']
-    BUILTIN_NAMES = ['Integer', 'Float', 'String', 'true', 'false', 'Function']
-    INTEGER = 'INTEGER'
-    FLOAT = 'FLOAT'
-    STRING = 'STRING'
-    FUNCTION = 'FUNCTION'
+    BUILTIN_NAMES = ['Integer', 'Float', 'String', 'Boolean', 'Function']
+
+SYSTEM_TRACE = SystemTrace()
 
 """
-*** PARSER NODES
+*** Internal File Object
 """
-class VariableType:
-    def __init__(self, token, gtype):
-        self.typetoken = token
-        self.type = gtype
+class InternalFile:
+    def __init__(self, file, tokens):
+        self.file = file
+        self.tokens = tokens
+        self.counter = 0
+        self.toklen = len(tokens)
 
-class VariableDeclaration:
-    def __init__(self, type, id):
-        self.type = type
-        self.id = id
+    def next(self):
+        token = self.tokens[self.counter]
+        self.counter += 1
+        return token
 
-class VariableAssignment:
-    def __init__(self, type, id, expr):
-        self.type = type
-        self.id = id
-        self.value = expr
-
-class Assignment:
-    def __init__(self, id, expr):
-        self.id = id
-        self.value = expr
-
-class VariableCall:
-    def __init__(self, vartoken):
-        self.token = vartoken
-        self.callname = vartoken.value
-        self.line, self.col = vartoken.copypos()
-
-class AttributeCall:
-    def __init__(self, vartoken, attrtoken):
-        self.variable = vartoken
-        self.attribute = attrtoken
-
-class MethodCall:
-    def __init__(self, vartoken, attrtoken, params):
-        self.variable = vartoken
-        self.method = attrtoken
-        self.params = params
-
-class IndexCall:
-    def __init__(self, vartoken, indextoken):
-        self.variable = vartoken
-        self.callname = vartoken.value
-        self.line1, self.col1 = vartoken.copypos()
-        self.index = indextoken
-        self.indexname = indextoken.value
-        self.line2, self.col2 = indextoken.copypos()
-
-class FunctionCall:
-    def __init__(self, vartoken, lexpr):
-        self.variable = vartoken
-        self.list_expr = lexpr
-
-class ReturnStatement:
-    def __init__(self, token, expr):
-        self.ret = token
-        self.expr = expr
-
-class BinaryOperator:
-    def __init__(self, left, op, right):
-        self.left = left
-        self.op = op
-        self.right = right
-
-class UnaryOp:
-    def __init__(self, op, expr):
-        self.token = self.op = op
-        self.expr = expr
-
-class UnaryOperator:
-    def __init__(self, op, right):
-        self.op = op
-        self.right = right
-
-class Program:
-    def __init__(self, program):
-        self.block = program
-
-class PackageDeclaration:
-    def __init__(self, id):
-        self.id = id
-
-class ImportStatement:
-    def __init__(self, id):
-        self.id = id
-
-class Param:
-    def __init__(self, type, id):
-        self.type = type
-        self.id = id
-
-class CompoundStatement:
-    def __init__(self, compound):
-        self.compound = compound
-
-class Conditional:
-    def __init__(self, cond, ifb, elseb):
-        self.condition = cond
-        self.ifblock = ifb
-        self.elseblock = elseb
-
-class BreakLoop:
-    def __init__(self, token):
-        self.token = token
-
-class ContinueLoop:
-    def __init__(self, token):
-        self.token = token
-
-class PrintStatement:
-    def __init__(self, expr):
-        self.expr = expr
-
-"""
-*** Parser Helper Constants
-"""
-
-TYPE_MAP = {'int': 'Integer', 'float': 'Float', 'bool': 'Boolean',
-            'str': 'String', 'coll': 'Collection', 'arr': 'Array', 'func': 'Function'}
+    def peek(self, amount=0):
+        amount = amount if amount > 0 else 0
+        return self.tokens[self.counter + amount]
 
 """
 *** PARSER
 """
-
 class Parser(object):
-    def __init__(self, trace=None, tokens=None, file=None):
-        self.tokens = tokens
-        self.toklen = len(self.tokens)
+    def __init__(self, file=None, trace=None):
         self.trace = trace
         self.file = file
-        self.idtoken = 0
-        self.ctoken = self.tokens[0]
+        self.ctoken = None
+
+    """ Syntax Error Detection """
+    def error(self, token=None, mes=None):
+        mes = mes if mes is not None else 'Invalid Syntax'
+        token = token if token is not None else self.ctoken
+        self.trace.add(Trace.PARSEFILE, file=self.file.file, token=token)
+        err = IvySyntaxError(mes, self.trace)
+        raise err
+
+    """ FILE and PARSER METHODS """
+    def load(self, file, tokens):
+        self.file = InternalFile(file, tokens)
+        self.ctoken = self.file.next()
+
+    def parse(self):
+        res = self.program()
+        if self.ctoken.type == TokenType.EOF:
+            return Program(res)
+        self.error(mes='EOF Error')
+
+    def parsefile(self, file, tokens):
+        self.load(file, tokens)
+        return self.parse()
 
     """ TOKEN METHODS """
     def next_token(self):
-        self.idtoken += 1
-        self.ctoken = self.tokens[self.idtoken]
+        self.ctoken = self.file.next()
 
     def peek(self, amount=0):
         amount = amount if amount > 1 else 1
-        return self.tokens[self.idtoken+amount]
+        return self.file.tokens[self.counter+amount]
 
     def peek_match(self, token_type, amount=0):
         if self.peek(amount).type == token_type:
@@ -616,14 +125,14 @@ class Parser(object):
         return False
 
     def match(self, token_type):
-        if self.idtoken < self.toklen - 1:
+        if self.file.counter < self.file.toklen - 1:
             if self.ctoken.type == token_type:
                 self.next_token()
                 return True
         return False
 
     def current(self, token_type):
-        if self.idtoken < self.toklen - 1:
+        if self.file.counter < self.file.toklen - 1:
             if self.ctoken.type == token_type:
                 return True
         return False
@@ -631,15 +140,6 @@ class Parser(object):
     def eat(self, token_type):
         if self.ctoken.type == token_type:
             self.ctoken = self.next_token()
-
-    """ Syntax Error Detection """
-    def error(self, token=None, mes=None):
-        mes = mes if mes is not None else 'Invalid Syntax'
-        token = token if token is not None else self.ctoken
-        self.trace.add_trace(self.file, token)
-        err = IvySyntaxError(mes, self.trace)
-        output = err.get_error()
-        print(output)
 
     def eatdef(self, token_type):
         token = self.ctoken
@@ -799,7 +299,7 @@ class Parser(object):
             elif self.match(TokenType.CONTINUE):
                 res = ContinueLoop(token)
             else:
-                res = self.expression()
+                res = PrintStatement(self.expression())
         semicolon = self.match(TokenType.SEMICOLON)
         if not semicolon:
             self.error(mes='Expected a `;` to finish statement')
@@ -813,23 +313,14 @@ class Parser(object):
 
     """ SYNTAX EATERS """
     def eat_assignment(self):
-        if self.ctoken.type == TokenType.IDENTIFIER or self.ctoken.value in TYPE_MAP.keys():
-            if self.peek_match(TokenType.IDENTIFIER, 1):
-                type, id = self.eat_declaration()
-                if self.match(TokenType.EQUALS):
-                    if self.ctoken.type == TokenType.FUNCTION:
-                        expr = self.function_expression()
-                        return VariableAssignment(type, id, expr)
-                    return VariableAssignment(type, id, self.expression())
-                return VariableDeclaration(type, id)
-            elif self.peek_match(TokenType.EQUALS):
-                id = self.eat_id()
-                if self.match(TokenType.EQUALS):
-                    if self.ctoken.type == TokenType.FUNCTION:
-                        expr = self.function_expression()
-                        return Assignment(id, expr)
-                    expr = self.expression()
+        if self.current(TokenType.IDENTIFIER) and self.peek_match(TokenType.EQUALS):
+            id = self.eat_id()
+            if self.match(TokenType.EQUALS):
+                if self.current(TokenType.FUNCTION):
+                    expr = self.function_expression()
                     return Assignment(id, expr)
+                expr = self.expression()
+                return Assignment(id, expr)
         return False
 
     def eat_list_expression(self):
@@ -867,12 +358,11 @@ class Parser(object):
 
     def eat_list_decl(self):
         params = []
-        if self.ctoken.type == TokenType.IDENTIFIER or self.ctoken.value in TYPE_MAP.keys():
-            if self.peek_match(TokenType.IDENTIFIER):
-                params = [(self.eat_type(), self.eat_id())]
-                while self.match(TokenType.COMMA):
-                    params.append((self.eat_type(), self.eat_id()))
-                if self.match(TokenType.COMMA): pass
+        if self.current(TokenType.IDENTIFIER):
+            params = [self.eat_id()]
+            while self.match(TokenType.COMMA):
+                params.append(self.eat_id())
+            if self.match(TokenType.COMMA): pass
         return params
 
     def eat_declaration(self):
@@ -950,12 +440,6 @@ class Parser(object):
         if not res:
             res = self.statement()
         return res
-
-    def parse(self):
-        res = self.program()
-        if self.ctoken.type == TokenType.EOF:
-            return Program(res)
-        self.error(mes='EOF Error')
 
 """
 *** Call Stack
@@ -1050,16 +534,21 @@ class SemanticAnalyzer:
 """
 *** Main Interpreter
 """
-class Return:
-    def __init__(self, expr):
-        self.to_return = expr
 
 class Interpreter:
-    def __init__(self, parser, callstack, file=None):
-        self.file = file
-        self.parser = parser
-        self.tree = self.parser.parse()
+    def __init__(self, callstack):
+        self.file = None
         self.callstack = callstack
+
+    def load(self, file, tree):
+        self.file = file
+        self.tree = tree
+
+    def interpret(self):
+        tree = self.tree
+        if tree is None:
+            return str()
+        return self.visit(tree)
 
     def visit(self, node):
         if isinstance(node, DataObject) or isinstance(node, Null):
@@ -1224,12 +713,6 @@ class Interpreter:
         if not isinstance(met, Boolean):
             return eval('met({})'.format(params))
 
-    def interpret(self):
-        tree = self.tree
-        if tree is None:
-            return ''
-        return self.visit(tree)
-
 """
 *** SYSTEM CONSTANTS
 """
@@ -1238,94 +721,129 @@ SYSTEM_LOG_CALLS = False
 SYSTEM_LOG_TRACES = False
 
 """
-*** Ivy System
+*** FILES AND PACKAGES
 """
 
-class SystemRuntime: pass
+class Package: pass
 
-class System:
+class DynamicPackage(Package): pass
 
-    def __init__(self):
-        self.exception = False
-
-        """ Python sys module """
-        self.python = sys
-
-        """ System Trace Stack """
-        self._trace = TraceStack()
-        self._callstack = CallStack()
-
-        self.system = Record('<system>', Rec.SYSTEM, 0)
-        self._callstack.push(self.system)
-
-        """ Main System Objects """
-        self._lexer = Lexer(self._trace)
-
-    def initsys(self, file=None, tokens=None):
-        file = file if file is not None else self.createfile('<stdin>','<stdin>','')
-        self._parser = Parser(self._trace, tokens, file)
-        self._interp = Interpreter(self._parser, self._callstack)
-
-    def tokenizefile(self, path):
-        file = self.createfilefrompath(path)
-        self._lexer.load(file)
-        return self._lexer.tokenize()
-
-    def createfile(self, name, path, content):
-        if len(content) > 0:
-            return File(name, path, content)
-        exit(0)
-
-    def createfilefrompath(self, path):
-        fn, fp, content = self.readfile(path)
-        file = File(fn, fp, content)
-        # self._trace.add_trace(file, None)
-        if len(content) > 0:
-            return file
-        exit(0)
-
-    def tokenized(self, path):
-        self._lexer.load(self.createfilefrompath(path))
-        for i in self._lexer.tokenize():
-            print(i)
-
-    def readfile(self, path):
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        abs_file_path = os.path.join(script_dir, path)
-        if os.path.exists(abs_file_path):
-            full_path = abs_file_path
-        else:
-            full_path = path
-        try:
-            self.filepath = full_path
-            self.filename = full_path.split('/')[-1]
-            yield self.filename
-            yield full_path
-            with open(full_path, 'r') as content_file:
-                content = content_file.read()
-                yield content
-        except IOError:
-            yield None
-            print(IvyIOError('No such file found', File(self.filename, self.filepath, content=None)))
-            quit()
-
-    def runfile(self, path):
-        file = self.createfilefrompath(path)
-        tokens = self.tokenizefile(path)
-        self.initsys(file, tokens)
-        res = self._interp.interpret()
-
-    def push_error(self): pass
-
-    def dynamic_package(self):
-        return
+class Module: pass
 
 """
 *** Main Ivy Console
 *** Provides access to System()
 """
-class IvyConsole:
 
+class IOModule(Module):
+    def __init__(self): pass
+
+    def error(self, mes):
+        raise IvyIOError(mes, SYSTEM_TRACE)
+
+    def filefrompath(self, path):
+        tryfullpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
+        fullpath = path
+        if os.path.exists(tryfullpath):
+            fullpath = tryfullpath
+        try:
+            SYSTEM_TRACE.add(Trace.READFILE, filepath=fullpath) # Logging
+            filepath = fullpath
+            filename = fullpath.split('/')[-1]
+            return IOWrapper(filename, filepath)
+        except IOError:
+            self.error('Cannot find file from specified path')
+
+    def __repr__(self):
+        return '<System.IO>'
+
+    __str__ = __repr__
+
+class IOWrapper:
+    def __init__(self, name, path):
+        with open(path, 'r') as file:
+            self.wrapper = file
+            self.contents = file.read()
+        self.name = name
+        self.path = path
+        self.line_counter = 0
+
+    def __repr__(self):
+        return f'<System.IO.IOWrapper name={self.name} path={self.path}>'
+
+    __str__ = __repr__
+
+    def split(self):
+        return self.contents.split('\n')
+
+    def getline(self, ind):
+        return self.split_lines()[ind]
+
+    def readline(self):
+        content = self.split()[self.line_counter]
+        self.line_counter += 1
+        return content
+
+    def read(self):
+        return self.contents
+
+    def write(self, line):
+        with open(path, 'w') as file:
+            self.wrapper = file
+            file.write(line)
+
+"""
+*** Ivy System
+"""
+
+class System:
+    def __init__(self):
+        "IO Module for System"
+        self.io = IOModule()
+
+        """ System Memory """
+        self.callstack = CallStack()
+
+        """ System Modification for the call stack """
+        self.system = Record('<system>', Rec.SYSTEM, 0)
+        self.callstack.push(self.system)
+
+        """ Initialize System Objects """
+        self.lexer = Lexer(SYSTEM_TRACE)
+        self.parser = Parser(SYSTEM_TRACE)
+        self.interpreter = Interpreter(self.callstack)
+
+    def tokenizefile(self, path):
+        file = self.io.filefrompath(path)
+        return self.lexer.tokenizefile(file)
+
+    def tokenized(self, path):
+        for i in self.tokenizefile(path):
+            print(i)
+        print(SYSTEM_TRACE)
+
+    def runfile(self, path):
+        try:
+            file = self.createfilefrompath(path)
+            tokens = self.tokenizefile(path)
+            self.initsys(file, tokens)
+            res = self._interp.interpret()
+        except Error as e:
+            print(e.get_error())
+            exit(0)
+
+    def repl(self):
+        """ The REPL """
+        sys.stderr.write("Ivy Language REPL.")
+        while True:
+            try:
+                getin = input("ivy> ")
+                self.run_code(str(getin))
+            except Error as e:
+                print(e.get_error())
+                exit(0)
+
+class IvyConsole:
     def __init__(self):
         self._system = System()
 
@@ -1355,17 +873,6 @@ class IvyConsole:
             return self.repl()
         parser.print_help(sys.stderr)
         sys.exit(1)
-
-    def run(self, program):
-        self._system.run_code(program)
-
-    def repl(self):
-        """ The REPL """
-        print("Ivy Language REPL.")
-        print("Version 1.0")
-        while True:
-            getin = input("ivy> ")
-            self.run(str(getin))
 
 if __name__ == '__main__':
     ivy = IvyConsole()

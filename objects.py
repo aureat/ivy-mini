@@ -310,6 +310,9 @@ class Float(DataObject):
 class String(DataObject):
     def __init__(self, data):
         super().__init__(obj_type='String', data=data)
+        self.objdef.update({
+            'length': len(self.data)
+        })
 
     def op_plus(self):
         self.undefined()
