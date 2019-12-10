@@ -45,8 +45,10 @@ class Lexer(object):
     """ Interface Methods """
 
     def tokenizefile(self, file):
+        self.trace.add('Creating a positional file for lexer', filepath=file.path)
         self.file = PositionalFile(file)
         self.current_char = self.file.contents[0]
+        self.trace.add('Tokenizing file', filepath=file.path)
         return self.tokenize()
 
     def tokenize(self):
@@ -64,7 +66,7 @@ class Lexer(object):
 
     def error(self, mes, tok):
         file = self.file.file
-        self.trace.add(file, tok)
+        self.trace.add(type='Syntax',file=file, token=tok)
         err = IvyLexerError(mes, self.trace)
         raise err
 

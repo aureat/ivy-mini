@@ -56,7 +56,6 @@ class IvyObject(object):
     def attrget(self, att):
         if att in self.objdef:
             return self.objdef[att]
-        return self.getprop(att)
 
     def attrset(self, att, val):
         self.objdef[att] = val

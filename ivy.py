@@ -16,26 +16,13 @@ from enum import Enum
 """
 from objects import *
 from error import Error, IvySyntaxError, IvyParseError, IvyLexerError, IvyIOError, IvyTypeError
-from lexer import Lexer
+from lexer import Lexer, RESERVED_KEYWORDS
 from tokentype import TokenType
 from ast import *
 
 """
 *** Trace Stack
 """
-
-class Trace(Enum):
-    READFILE = 'Reading file'
-    TOKENIZEFILE = 'Tokenizing file'
-    PARSEFILE = 'Parsing file'
-    INTERPRETFILE = 'Interpreting file'
-    CALLFUNC = 'Calling function'
-    RETURNFUNC = 'Returning function'
-    CREATEOBJ = 'Creating Ivy Object'
-    ENTERSCOPE = 'Entering scope'
-    CLOSESCOPE = 'Closing scope'
-    LOOKUPSYM = 'Looking up a symbol'
-    STORESYM = 'Storing a symbol'
 
 class SystemTrace():
     def __init__(self):
@@ -92,7 +79,7 @@ class Parser(object):
     def error(self, token=None, mes=None):
         mes = mes if mes is not None else 'Invalid Syntax'
         token = token if token is not None else self.ctoken
-        self.trace.add(Trace.PARSEFILE, file=self.file.file, token=token)
+        self.trace.add('Parsing file', file=self.file.file, token=token)
         err = IvySyntaxError(mes, self.trace)
         raise err
 
@@ -101,7 +88,8 @@ class Parser(object):
         self.file = InternalFile(file, tokens)
         self.ctoken = self.file.next()
 
-    def parse(self):
+    def parse(self, file, tokens):
+        self.load(file, tokens)
         res = self.program()
         if self.ctoken.type == TokenType.EOF:
             return Program(res)
@@ -115,17 +103,14 @@ class Parser(object):
     def next_token(self):
         self.ctoken = self.file.next()
 
-    def peek(self, amount=0):
-        amount = amount if amount > 1 else 1
-        return self.file.tokens[self.counter+amount]
-
     def peek_match(self, token_type, amount=0):
-        if self.peek(amount).type == token_type:
-            return True
+        if self.file.counter < self.file.toklen:
+            if self.file.tokens[self.file.counter+amount-1].type == token_type:
+                return True
         return False
 
     def match(self, token_type):
-        if self.file.counter < self.file.toklen - 1:
+        if self.file.counter < self.file.toklen:
             if self.ctoken.type == token_type:
                 self.next_token()
                 return True
@@ -159,10 +144,13 @@ class Parser(object):
         elif self.match(TokenType.MINUS):
             res=UnaryOp(token, self.atom())
         elif self.match(TokenType.TRUE):
+            do_attr = True
             res = TrueBoolean()
         elif self.match(TokenType.FALSE):
+            do_attr = True
             res = FalseBoolean()
         elif self.match(TokenType.NULL):
+            do_attr = True
             res = Null()
         elif self.match(TokenType.BOOLEAN_CONST):
             do_attr = True
@@ -188,9 +176,8 @@ class Parser(object):
         else:
             do_attr=True
             res = self.eat_call()
-            if res == False:
-                self.error(token)
-        while do_attr and self.ctoken.type == TokenType.DOT:
+            if not res: return None
+        while do_attr and self.current(TokenType.DOT):
             dot = self.ctoken
             if self.match(TokenType.DOT):
                 attr = self.ctoken
@@ -262,7 +249,6 @@ class Parser(object):
                     if self.match(op):
                         binfactor = BinaryOperator(binfactor, optok, self.binfactor())
             return binfactor
-        return False
 
     def function_expression(self):
         if self.match(TokenType.FUNCTION):
@@ -313,37 +299,45 @@ class Parser(object):
 
     """ SYNTAX EATERS """
     def eat_assignment(self):
-        if self.current(TokenType.IDENTIFIER) and self.peek_match(TokenType.EQUALS):
+        if self.current(TokenType.IDENTIFIER) and self.peek_match(TokenType.EQUALS, 1):
             id = self.eat_id()
             if self.match(TokenType.EQUALS):
-                if self.current(TokenType.FUNCTION):
-                    expr = self.function_expression()
-                    return Assignment(id, expr)
                 expr = self.expression()
                 return Assignment(id, expr)
         return False
 
     def eat_list_expression(self):
-        expr = [self.expression()]
+        getexpr = self.expression()
+        expr = [getexpr] if getexpr is not None else []
         while self.match(TokenType.COMMA):
             expr.append(self.expression())
         return expr
 
     def eat_call(self):
+        print("eat call ")
         token = self.ctoken # Identifier
-        if self.match(TokenType.IDENTIFIER):
+        print(token)
+        gexpr = token
+        if self.match(TokenType.IDENTIFIER) or self.current(TokenType.FUNCTION):
+            if self.current(TokenType.FUNCTION):
+                gexpr = self.function_expression()
             if self.match(TokenType.LPAREN):
                 expr = self.eat_list_expression()
                 if self.match(TokenType.RPAREN):
-                    return FunctionCall(token, expr)
+                    return FunctionCall(gexpr, expr)
                 self.error(mes='Expected a closing paranthesis to finish function call')
             elif self.match(TokenType.L_SQ_BRACK):
                 expr = self.expression()
                 if self.match(TokenType.R_SQ_BRACK):
-                    return IndexCall(token, expr)
+                    return IndexCall(gexpr, expr)
                 self.error(mes='Expected a closing bracket to finish index call')
+            elif token.type == TokenType.FUNCTION:
+                print("getting function")
+                print(gexpr)
+                return gexpr
             else:
-                return VariableCall(token)
+                print("var call")
+                return VariableCall(gexpr)
         return False
 
     def eat_type(self):
@@ -496,9 +490,9 @@ class Record:
 
     def init_builtin_frame(self):
         self.members.update({
-            'SYSTEM_RECORD_NAME': ('String', self.name),
-            'SYSTEM_RECORD_TYPE': ('String', self.type),
-            'SYSTEM_RECORD_DEPTH': ('String', self.depth),
+            'SYSTEM_RECORD_NAME': self.name,
+            'SYSTEM_RECORD_TYPE': self.type,
+            'SYSTEM_RECORD_DEPTH': self.depth,
         })
 
     def __str__(self):
@@ -536,15 +530,16 @@ class SemanticAnalyzer:
 """
 
 class Interpreter:
-    def __init__(self, callstack):
-        self.file = None
+    def __init__(self, callstack, trace):
         self.callstack = callstack
+        self.trace = trace
 
     def load(self, file, tree):
         self.file = file
         self.tree = tree
 
-    def interpret(self):
+    def interpret(self, file, tree):
+        self.load(file, tree)
         tree = self.tree
         if tree is None:
             return str()
@@ -650,31 +645,20 @@ class Interpreter:
         record = self.callstack.peek()
         record[var_name] = (var_type, Null())
 
-    def visit_VariableAssignment(self, node):
-        type = node.type.type
-        id = node.id.value
-        value = self.visit(node.value)
-        if isinstance(value, Function):
-            value.name = id
-        record = self.callstack.peek()
-        record[id] = (type, value)
-
     def visit_Assignment(self, node):
         id = node.id.value
+        record = self.callstack.peek()
         value = self.visit(node.value)
         if isinstance(value, Function):
             value.name = id
-        record = self.callstack.peek()
-        if record[id] != False:
-            record[id] = (record[id][0], value)
-        print("Variable not declared")
+        record[id] = value
 
     def visit_VariableCall(self, node):
         var_name = node.callname
         record = self.callstack.peek()
         value = record[var_name]
         if value != False:
-            return value[1]
+            return value
         print("Variable does not exist")
 
     def visit_FunctionCall(self, node):
@@ -683,7 +667,6 @@ class Interpreter:
         func = cur_record[node.variable.value]
         if not func:
             print("function not found")
-        func = func[1]
         record = self.callstack.copy(Record(func.name, Rec.FUNCTION, cur_depth+1))
         if len(func.params) != len(node.list_expr):
             print("Number of arguments given to funciton do not match number of declared parameters")
@@ -747,9 +730,10 @@ class IOModule(Module):
         if os.path.exists(tryfullpath):
             fullpath = tryfullpath
         try:
-            SYSTEM_TRACE.add(Trace.READFILE, filepath=fullpath) # Logging
+            SYSTEM_TRACE.add('Reading file', filepath=fullpath)
             filepath = fullpath
             filename = fullpath.split('/')[-1]
+            SYSTEM_TRACE.add('Creating IOWrapper for file', filepath=fullpath)
             return IOWrapper(filename, filepath)
         except IOError:
             self.error('Cannot find file from specified path')
@@ -777,7 +761,7 @@ class IOWrapper:
         return self.contents.split('\n')
 
     def getline(self, ind):
-        return self.split_lines()[ind]
+        return self.split()[ind]
 
     def readline(self):
         content = self.split()[self.line_counter]
@@ -809,28 +793,31 @@ class System:
         self.callstack.push(self.system)
 
         """ Initialize System Objects """
-        self.lexer = Lexer(SYSTEM_TRACE)
-        self.parser = Parser(SYSTEM_TRACE)
-        self.interpreter = Interpreter(self.callstack)
+        self.lexer = Lexer(trace=SYSTEM_TRACE)
+        self.parser = Parser(trace=SYSTEM_TRACE)
+        self.interpreter = Interpreter(callstack=self.callstack, trace=SYSTEM_TRACE)
+
+    """ LEXER METHODS """
 
     def tokenizefile(self, path):
         file = self.io.filefrompath(path)
-        return self.lexer.tokenizefile(file)
+        return file, self.lexer.tokenizefile(file)
+
+    """ RUN METHODS """
 
     def tokenized(self, path):
-        for i in self.tokenizefile(path):
-            print(i)
-        print(SYSTEM_TRACE)
+        try:
+            for i in self.tokenizefile(path)[1]: print(i)
+        except Error as e:
+            print(e)
 
     def runfile(self, path):
         try:
-            file = self.createfilefrompath(path)
-            tokens = self.tokenizefile(path)
-            self.initsys(file, tokens)
-            res = self._interp.interpret()
+            file, tokens = self.tokenizefile(path)
+            tree = self.parser.parse(file, tokens)
+            res = self.interpreter.interpret(file, tree)
         except Error as e:
-            print(e.get_error())
-            exit(0)
+            print(e)
 
     def repl(self):
         """ The REPL """
@@ -840,8 +827,7 @@ class System:
                 getin = input("ivy> ")
                 self.run_code(str(getin))
             except Error as e:
-                print(e.get_error())
-                exit(0)
+                print(e)
 
 class IvyConsole:
     def __init__(self):

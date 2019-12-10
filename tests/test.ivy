@@ -1,2 +1,8 @@
-name = "Altun;
-print name.length;
+a = "Hello, world!";
+b = function() {
+    a = 12;
+    print SYSTEM_RECORD_NAME;
+    return function(){ print SYSTEM_RECORD_NAME; print a; };
+};
+getfunc = b();
+getfunc();

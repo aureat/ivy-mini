@@ -11,29 +11,31 @@ class Error(Exception):
         self.trace = tracestack
 
     def get_error(self):
-        error = '\nSystem Traceback\n'
-        error += '(most recent activity last):\n'
+        error = '\nSystem Traceback (most recent activity last):\n'
         for i in self.trace.trace:
-            error += str(i['type']) + '\n'
+            error += '* ' + str(i['type']) + '\n'
             if i['file'] != None:
                 name = i['file'].name
-                error += '   ' + str(i['file'].path) + '\n'
+                # error += '   ' + str(i['file'].path) + '\n'
                 error += f'   File {name}'
                 if i['token'] != None:
-                    line = i['file'].getline(i['token'].line)
+                    linenum = i['token'].line
+                    line = i['file'].getline(linenum)
                     char = i['token'].col
                     trace_beg = min(30,len(line[:char]))
                     trace_end = min(30,len(line[char:]))
-                    error += f', on {line+1}:{char+1}'
+                    error += ', on {}:{}'.format(linenum+1,char)
                 if i['name']:
                     modname = i['name']
                     error += f' in {modname}'
                 if i['token'] != None:
                     error += '\n\t' + line[char-trace_beg:char+trace_end] + '\n'
-                    if char >= 0: error += '\t' + " " * char + '^\n'
+                    if char >= 0: error += '\t' + " " * (char-1) + '^'
             elif i['filepath']:
                 filepath = i['filepath']
                 error += f'\t{filepath}'
+            error += '\n'
+        error += '> {}: {}\n'.format(self.name, self.message)
         return error
 
     def __repr__(self):
@@ -60,3 +62,7 @@ class IvyIOError(Error):
 class IvyTypeError(Error):
     def __init__(self, desc, trace):
         super().__init__(desc, 'TypeError', trace)
+
+class IvyNameError(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'NameError', trace)
