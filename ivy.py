@@ -135,31 +135,42 @@ class Parser(object):
             self.error(mes='Unexpected token')
 
     """ EXPRESSIONS """
+
+    def eat_collection(self):
+        if self.match(TokenType.L_SQ_BRACK):
+            if not self.match(TokenType.R_SQ_BRACK):
+                coll = [self.expression()]
+                while self.match(TokenType.COMMA):
+                    coll.append(self.expression())
+                if self.match(TokenType.COMMA): pass
+                if self.match(TokenType.R_SQ_BRACK):
+                    return Collection(coll)
+                self.error(mes='Expected a closing `]` to finish collection')
+            elif self.match(TokenType.R_SQ_BRACK):
+                return Collection([])
+        return False
+
     def atom(self):
         token = self.ctoken
         res = None
-        do_attr = False
-        if self.match(TokenType.PLUS):
+        do_attr = True
+        if self.current(TokenType.L_SQ_BRACK):
+            res = self.eat_collection()
+        elif self.match(TokenType.PLUS):
             res = UnaryOp(token, self.atom())
         elif self.match(TokenType.MINUS):
             res=UnaryOp(token, self.atom())
         elif self.match(TokenType.TRUE):
-            do_attr = True
             res = TrueBoolean()
         elif self.match(TokenType.FALSE):
-            do_attr = True
             res = FalseBoolean()
         elif self.match(TokenType.NULL):
-            do_attr = True
             res = Null()
         elif self.match(TokenType.BOOLEAN_CONST):
-            do_attr = True
             res= Boolean(token.value)
         elif self.match(TokenType.INTEGER_CONST):
-            do_attr = True
             res= Integer(token.value)
         elif self.match(TokenType.FLOAT_CONST):
-            do_attr = True
             res= Float(token.value)
         elif self.match(TokenType.D_QUOTE):
             string = self.eatdef(TokenType.STRING_CONST)
@@ -170,26 +181,27 @@ class Parser(object):
             self.eatdef(TokenType.S_QUOTE)
             res= String(string.value)
         elif self.match(TokenType.LPAREN):
+            do_attr = False
             res= self.expression()
             if not self.match(TokenType.RPAREN):
                 self.error(mes='Expected a closing parantheses `)` to finish expression')
+        elif self.current(TokenType.FUNCTION):
+            res = self.function_expression()
         else:
-            do_attr=True
-            res = self.eat_call()
-            if not res: return None
-        while do_attr and self.current(TokenType.DOT):
-            dot = self.ctoken
-            if self.match(TokenType.DOT):
-                attr = self.ctoken
-                if self.match(TokenType.IDENTIFIER):
-                    if self.match(TokenType.LPAREN):
-                        params = self.eat_list_expression()
-                        if self.match(TokenType.RPAREN):
-                            res = MethodCall(res, attr, params)
-                            continue
-                    res = AttributeCall(res, attr)
-                    continue
-                self.error(dot)
+            if self.match(TokenType.IDENTIFIER):
+                res = VariableCall(token)
+            else:
+                return None
+        """
+            Handling calls
+            ex. variable.attribute[index]().attribute[][][]()().attribute
+            * Index Call [ expression ]
+            * Attribute Call  .identifier
+            * Function Call (expression, expression, ... , expression)
+        """
+        if do_attr:
+            while self.current(TokenType.DOT) or self.current(TokenType.LPAREN) or self.current(TokenType.L_SQ_BRACK):
+                res = self.eat_call(res)
         return res
 
     def factor(self):
@@ -285,7 +297,7 @@ class Parser(object):
             elif self.match(TokenType.CONTINUE):
                 res = ContinueLoop(token)
             else:
-                res = PrintStatement(self.expression())
+                res = self.expression()
         semicolon = self.match(TokenType.SEMICOLON)
         if not semicolon:
             self.error(mes='Expected a `;` to finish statement')
@@ -313,31 +325,23 @@ class Parser(object):
             expr.append(self.expression())
         return expr
 
-    def eat_call(self):
-        print("eat call ")
-        token = self.ctoken # Identifier
-        print(token)
-        gexpr = token
-        if self.match(TokenType.IDENTIFIER) or self.current(TokenType.FUNCTION):
-            if self.current(TokenType.FUNCTION):
-                gexpr = self.function_expression()
-            if self.match(TokenType.LPAREN):
-                expr = self.eat_list_expression()
-                if self.match(TokenType.RPAREN):
-                    return FunctionCall(gexpr, expr)
-                self.error(mes='Expected a closing paranthesis to finish function call')
-            elif self.match(TokenType.L_SQ_BRACK):
-                expr = self.expression()
-                if self.match(TokenType.R_SQ_BRACK):
-                    return IndexCall(gexpr, expr)
-                self.error(mes='Expected a closing bracket to finish index call')
-            elif token.type == TokenType.FUNCTION:
-                print("getting function")
-                print(gexpr)
-                return gexpr
-            else:
-                print("var call")
-                return VariableCall(gexpr)
+    def eat_call(self, expr):
+        token = self.ctoken
+        if self.match(TokenType.DOT):
+            attr = self.ctoken
+            if self.match(TokenType.IDENTIFIER):
+                return AttributeCall(expr, attr)
+            self.error(mes='Expected an identifier to finish attribute call')
+        elif self.match(TokenType.LPAREN):
+            list_expr = self.eat_list_expression()
+            if self.match(TokenType.RPAREN):
+                return FunctionCall(expr, list_expr)
+            self.error(mes="Expected a closing paranthesis ')' to finish function call")
+        elif self.match(TokenType.L_SQ_BRACK):
+            index = self.expression()
+            if self.match(TokenType.R_SQ_BRACK):
+                return IndexCall(expr, index)
+            self.error(mes="Expected a closing bracket ']' to finish function call")
         return False
 
     def eat_type(self):
@@ -418,6 +422,8 @@ class Parser(object):
             cond = None
         else:
             cond = conds[-1][1]
+        print(conds)
+        print(cond)
         for i in range(len(conds)-2,0,-1):
             cond = Conditional(conds[i][0], conds[i][1], cond)
         return cond
@@ -580,10 +586,16 @@ class Interpreter:
     def visit_Conditional(self, node):
         comp = self.visit(node.condition)
         if comp.istrue():
-            return self.visit(node.ifblock)
+            for i in node.ifblock.block:
+                exc = self.visit(i)
+                if isinstance(exc, Return):
+                    return exc
         else:
             if node.elseblock is not None:
-                return self.visit(node.elseblock)
+                for i in node.elseblock.block:
+                    exc = self.visit(i)
+                    if isinstance(exc, Return):
+                        return exc
 
     def visit_CompoundStatement(self, node):
         for stmt in node.compound:
@@ -623,9 +635,9 @@ class Interpreter:
         elif node.op.type == TokenType.OR:
             return left.getop('or', right)
         elif node.op.type == TokenType.COMP_ID:
-            return left.op_ideq(right)
+            return left.getop('ideq', right)
         elif node.op.type == TokenType.COMP_ID_NOT:
-            return left.op_ideq_not(right)
+            return left.getop('ideq_not', right)
 
     def visit_DataObject(self, node):
         return node
@@ -664,15 +676,13 @@ class Interpreter:
     def visit_FunctionCall(self, node):
         cur_record = self.callstack.peek()
         cur_depth = cur_record.depth
-        func = cur_record[node.variable.value]
-        if not func:
-            print("function not found")
+        func = self.visit(node.variable)
         record = self.callstack.copy(Record(func.name, Rec.FUNCTION, cur_depth+1))
         if len(func.params) != len(node.list_expr):
-            print("Number of arguments given to funciton do not match number of declared parameters")
+            print("Number of arguments given to function do not match number of declared parameters")
         for n, i in enumerate(func.params):
             val = self.visit(node.list_expr[n])
-            record[i[1].value] = (val.gettype(), val)
+            record[i.value] = val
         self.callstack.push(record)
         call = self.visit(func.block)
         self.callstack.pop()
@@ -689,10 +699,25 @@ class Interpreter:
     def visit_AttributeCall(self, node):
         return self.visit(node.variable).attrget(node.attribute.value)
 
+    def visit_IndexCall(self, node):
+        var = self.visit(node.variable)
+        index = self.visit(node.index)
+        if not hasattr(var, "getitem"):
+            print("This object cannot be called by index!")
+        return var.getitem(index)
+
     def visit_MethodCall(self, node):
+
+        def process_param(param):
+            if isinstance(param, String):
+                return '"' + str(param.data) + '"'
+            elif isinstance(param, Boolean):
+                return str(param.__bool__())
+            return str(param.data)
+
         metval = self.visit(node.variable)
         met = metval.getmethod(node.method.value)
-        params = ','.join([str(i.data) for i in node.params]) if node.params != [False] else ''
+        params = ','.join([process_param(i) for i in node.params]) if node.params != [False] else ''
         if not isinstance(met, Boolean):
             return eval('met({})'.format(params))
 

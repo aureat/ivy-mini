@@ -31,6 +31,14 @@ OPMAP = {
 
 class IvyObject(object):
 
+    """
+        ABSTRACT CLASS for Ivy Objects
+        * Objdef Attribute: object definition of an ivy object
+        * Access Method: gives access to all attributes of an ivy object
+        * Inspect Method: gives access to all object definition of an ivy object
+
+    """
+
     """ INITIALIZE IVY OBJECT """
     def __init__(self, obj_name=None, obj_type=None):
         name = obj_name if obj_name != None else self.getname()
@@ -40,6 +48,8 @@ class IvyObject(object):
             'obj_type': obj_type if obj_type != None else self.getname(),
             'obj_class_name': self.getname(),
             'obj_self': self.getobj(),
+            'access': self.getprop,
+            'inspect': self.attrget,
         }
 
     """ Python Attributes """
@@ -240,6 +250,11 @@ class Integer(DataObject):
     def __init__(self, data):
         super().__init__(obj_type='Integer', data=data)
 
+    def getitem(self, ref):
+        if isinstance(ref, Integer):
+            return String(str(self.data)[ref.data])
+        print("Only integer indexes are allowed for collections!")
+
     def op_plus(self):
         return Integer(self.data)
 
@@ -312,6 +327,11 @@ class String(DataObject):
         self.objdef.update({
             'length': len(self.data)
         })
+
+    def getitem(self, ref):
+        if isinstance(ref, Integer):
+            return String(self.data[ref.data])
+        print("Only integer indexes are allowed for collections!")
 
     def op_plus(self):
         self.undefined()
@@ -450,19 +470,28 @@ class FalseBoolean(Boolean):
 
 class Collection(DataObject):
     def __init__(self, data):
-        super().__init__(obj_type='coll', data=data)
+        super().__init__(obj_type='Collection', data=data)
         self.objdef.update({
-            'obj_coll': []
+            'obj_coll': data
         })
 
     def getitem(self, ref):
-        return self.objdef['obj_coll'][ref]
+        if isinstance(ref, Integer):
+            return self.objdef['obj_coll'][ref.data]
+        print("Only integer indexes are allowed for collections!")
 
     def additem(self, val):
         self.objdef['obj_coll'].append(val)
 
     def delitem(self, val):
         self.objdef['obj_coll'].remove(val)
+
+    def printable(self):
+        pt = '['
+        for n,i in enumerate(self.data):
+            pt += str(i.printable())
+            if n!=len(self.data)-1: pt += ', '
+        return pt + ']'
 
 class Dictionary(DataObject):
     def __init__(self, data):

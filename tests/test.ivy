@@ -1,8 +1,12 @@
-a = "Hello, world!";
-b = function() {
-    a = 12;
-    print SYSTEM_RECORD_NAME;
-    return function(){ print SYSTEM_RECORD_NAME; print a; };
+factorial = function(n) {
+    if n<1 {
+        return 1;
+    }
+    return n*factorial(n-1);
 };
-getfunc = b();
-getfunc();
+
+fibonacci = function(n) {
+    return fibonacci(n-1) + fibonacci(n-2);
+};
+
+print fibonacci(5);

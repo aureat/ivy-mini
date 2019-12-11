@@ -40,13 +40,9 @@ class MethodCall:
         self.params = params
 
 class IndexCall:
-    def __init__(self, vartoken, indextoken):
-        self.variable = vartoken
-        self.callname = vartoken.value
-        self.line1, self.col1 = vartoken.copypos()
-        self.index = indextoken
-        self.indexname = indextoken.value
-        self.line2, self.col2 = indextoken.copypos()
+    def __init__(self, var, index):
+        self.variable = var
+        self.index = index
 
 class FunctionCall:
     def __init__(self, vartoken, lexpr):

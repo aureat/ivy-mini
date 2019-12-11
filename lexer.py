@@ -125,14 +125,14 @@ class Lexer(object):
         return token
 
     def is_idchar(self, char):
-        if char.isalpha() or char == '_':
+        if char.isalpha() or char.isdigit() or char == '_':
             return True
         return False
 
     def eat_id(self):
         token = Token(line=self.file.line, col=self.file.col)
         value = ''
-        if self.is_idchar(self.current_char):
+        if self.current_char.isalpha() or self.current_char == '_':
             value += self.current_char
             self.advance()
         while self.current_char != None and self.is_idchar(self.current_char):
@@ -181,7 +181,7 @@ class Lexer(object):
                         return self.rtoken(tok, q), str_tok, self.rtoken(tok2, q)
                     else:
                         self.error('Expected a `' + q + '` to finish string literal', tok2)
-            if self.is_idchar(self.current_char):
+            if self.current_char.isalpha() or self.current_char == '_':
                 return self.eat_id()
             elif self.current_char.isdigit():
                 return self.eat_number()

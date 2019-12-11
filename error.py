@@ -30,7 +30,7 @@ class Error(Exception):
                     error += f' in {modname}'
                 if i['token'] != None:
                     error += '\n\t' + line[char-trace_beg:char+trace_end] + '\n'
-                    if char >= 0: error += '\t' + " " * (char-1) + '^'
+                    if char >= 0: error += '\t' + " " * char + '^'
             elif i['filepath']:
                 filepath = i['filepath']
                 error += f'\t{filepath}'
