@@ -11,7 +11,8 @@ class Error(Exception):
         self.trace = tracestack
 
     def get_error(self):
-        error = '\nSystem Traceback (most recent activity last):\n'
+        error = '\nSystem Trace (most recent activity last):\n'
+        error+='...\n'
         for i in self.trace.trace:
             error += '* ' + str(i['type']) + '\n'
             if i['file'] != None:
@@ -51,6 +52,10 @@ class IvyParseError(Error):
     def __init__(self, desc, trace):
         super().__init__(desc, 'ParseError', trace)
 
+class IvyInterpretationError(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'Interpretation', trace)
+
 class IvyLexerError(Error):
     def __init__(self, desc, trace):
         super().__init__(desc, 'LexerError', trace)
@@ -66,3 +71,35 @@ class IvyTypeError(Error):
 class IvyNameError(Error):
     def __init__(self, desc, trace):
         super().__init__(desc, 'NameError', trace)
+
+class IvyRuntimeError(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'RuntimeError', trace)
+
+class IvyTypeError(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'TypeError', trace)
+
+class IvyAttributeError(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'AttributeError', trace)
+
+class IvyIndexError(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'IndexError', trace)
+
+class IvyCallError(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'CallError', trace)
+
+class IvyUndefinedOperation(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'UndefinedOperation', trace)
+
+class IvyValueError(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'ValueError', trace)
+
+class IvyZeroDivisionError(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'ZeroDivisionError', trace)

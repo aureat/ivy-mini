@@ -1,12 +1,38 @@
-factorial = function(n) {
-    if n<1 {
-        return 1;
-    }
-    return n*factorial(n-1);
+num = 43;
+print(num.istrue());
+num.istrue = function() {
+    return false;
 };
+print(num.istrue());
 
-fibonacci = function(n) {
-    return fibonacci(n-1) + fibonacci(n-2);
-};
-
-print fibonacci(5);
+// // Inspection & Access
+// object.inspect.*;
+// object.access.*;
+// object.inspect.name = ...;
+// object.access.__dict__ = null;
+// a = function(){
+//     record = System.CallStack.peek();
+// };
+// // Objects
+// Integer("34"); // 34
+// Float("313.2"); // 313.2
+// String(43); // '43'
+// String(true); // 'true'
+// String(false); // 'false'
+// String(null); // ''
+// Boolean(1); // true
+// Boolean(0); // false
+// Collection(1,2,3,4); // [1,2,3,4]
+// // System Object Methods
+// Object.become(true, false);
+// // System Objects
+// System.Lexer.addtoken();
+// System.Lexer.tokenize();
+// System.Parser.parse();
+// System.Interpreter.evaluate();
+// evaluate(); // same as above
+// System.Interpreter.visit();
+// // other
+// rec = System.CallStack.peek();
+// depth = rec.depth;
+// members = rec.members;

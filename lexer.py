@@ -45,10 +45,8 @@ class Lexer(object):
     """ Interface Methods """
 
     def tokenizefile(self, file):
-        self.trace.add('Creating a positional file for lexer', filepath=file.path)
         self.file = PositionalFile(file)
         self.current_char = self.file.contents[0]
-        self.trace.add('Tokenizing file', filepath=file.path)
         return self.tokenize()
 
     def tokenize(self):
@@ -108,7 +106,12 @@ class Lexer(object):
     def eat_number(self):
         token = Token(line=self.file.line, col=self.file.col)
         result = ''
+        zero_mode = False
         while self.current_char != None and self.current_char.isdigit():
+            if self.current_char == '0':
+                zero_mode = True
+            if zero_mode and self.current_char != '0':
+                self.error('Invalid number format', Token(type=None, value=self.current_char, line=self.file.line, col=self.file.col))
             result += self.current_char
             self.advance()
         if self.current_char == '.' and self.peek().isdigit():

@@ -105,10 +105,17 @@ class ContinueLoop:
     def __init__(self, token):
         self.token = token
 
-class PrintStatement:
-    def __init__(self, expr):
-        self.expr = expr
-
 class Return:
     def __init__(self, expr):
         self.to_return = expr
+
+class AttributeAccess:
+    def __init__(self, id, att):
+        self.variable = id
+        self.attribute = att
+
+class AttributeSet:
+    def __init__(self, id, att, expr):
+        self.variable = id
+        self.attribute = att
+        self.value = expr

@@ -45,8 +45,6 @@ class TokenType(Enum):
     IMPORT = 'import'
     USE = 'use'
     GLOBAL = 'global'
-    # PRINT STATEMENT
-    PRINT = 'print'
     # OBJECT CONSTRUCTION
     NEW_CONSTRUCTOR = 'new'
     FUNC = 'func'

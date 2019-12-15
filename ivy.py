@@ -14,8 +14,9 @@ from enum import Enum
 """
 *** SYSTEM OBJECTS
 """
-from objects import *
-from error import Error, IvySyntaxError, IvyParseError, IvyLexerError, IvyIOError, IvyTypeError
+from objects2 import *
+from callstack import *
+from error import *
 from lexer import Lexer, RESERVED_KEYWORDS
 from tokentype import TokenType
 from ast import *
@@ -69,6 +70,9 @@ class InternalFile:
 """
 *** PARSER
 """
+
+ObjMachine = ObjectMachine(SYSTEM_TRACE)
+
 class Parser(object):
     def __init__(self, file=None, trace=None):
         self.trace = trace
@@ -137,17 +141,18 @@ class Parser(object):
     """ EXPRESSIONS """
 
     def eat_collection(self):
+        token = self.ctoken
         if self.match(TokenType.L_SQ_BRACK):
-            if not self.match(TokenType.R_SQ_BRACK):
+            if not self.current(TokenType.R_SQ_BRACK):
                 coll = [self.expression()]
                 while self.match(TokenType.COMMA):
                     coll.append(self.expression())
                 if self.match(TokenType.COMMA): pass
                 if self.match(TokenType.R_SQ_BRACK):
-                    return Collection(coll)
+                    return ObjMachine.new(coll, token)
                 self.error(mes='Expected a closing `]` to finish collection')
             elif self.match(TokenType.R_SQ_BRACK):
-                return Collection([])
+                return ObjMachine.new([], token)
         return False
 
     def atom(self):
@@ -161,25 +166,25 @@ class Parser(object):
         elif self.match(TokenType.MINUS):
             res=UnaryOp(token, self.atom())
         elif self.match(TokenType.TRUE):
-            res = TrueBoolean()
+            res = ObjMachine.fromtoken(token)
         elif self.match(TokenType.FALSE):
-            res = FalseBoolean()
+            res = ObjMachine.fromtoken(token)
         elif self.match(TokenType.NULL):
-            res = Null()
+            res = ObjMachine.fromtoken(token)
         elif self.match(TokenType.BOOLEAN_CONST):
-            res= Boolean(token.value)
+            res= ObjMachine.fromtoken(token)
         elif self.match(TokenType.INTEGER_CONST):
-            res= Integer(token.value)
+            res= ObjMachine.fromtoken(token)
         elif self.match(TokenType.FLOAT_CONST):
-            res= Float(token.value)
+            res= ObjMachine.fromtoken(token)
         elif self.match(TokenType.D_QUOTE):
             string = self.eatdef(TokenType.STRING_CONST)
             self.eatdef(TokenType.D_QUOTE)
-            res= String(string.value)
+            res= ObjMachine.fromtoken(string)
         elif self.match(TokenType.S_QUOTE):
             string = self.eatdef(TokenType.STRING_CONST)
             self.eatdef(TokenType.S_QUOTE)
-            res= String(string.value)
+            res= ObjMachine.fromtoken(string)
         elif self.match(TokenType.LPAREN):
             do_attr = False
             res= self.expression()
@@ -263,6 +268,7 @@ class Parser(object):
             return binfactor
 
     def function_expression(self):
+        token = self.ctoken
         if self.match(TokenType.FUNCTION):
             if self.match(TokenType.LPAREN):
                 list_decl = self.eat_list_decl()
@@ -271,7 +277,7 @@ class Parser(object):
                 if not self.current(TokenType.LBRACK):
                     self.error('Expected a block to define anonymous function')
                 block = self.eat_block()
-                return Function(params=list_decl, code=block)
+                return Function(params=list_decl, code=block, token=token, trace=SYSTEM_TRACE)
 
     """ STATEMENTS """
     def statement(self):
@@ -283,9 +289,6 @@ class Parser(object):
                 if not self.peek_match(TokenType.SEMICOLON):
                     expr = self.expression()
                 res = ReturnStatement(token, expr)
-            elif self.match(TokenType.PRINT):
-                expr = self.expression()
-                res = PrintStatement(expr)
             elif self.match(TokenType.PACKAGE):
                 id = self.eat_id()
                 res = PackageDeclaration(id)
@@ -309,13 +312,20 @@ class Parser(object):
             statements.append(self.statement())
         return CompoundStatement(statements)
 
-    """ SYNTAX EATERS """
+    """ SYNTAX 'EATERS' """
     def eat_assignment(self):
-        if self.current(TokenType.IDENTIFIER) and self.peek_match(TokenType.EQUALS, 1):
+        if self.current(TokenType.IDENTIFIER) and (self.peek_match(TokenType.EQUALS, 1) or self.peek_match(TokenType.DOT, 1)):
             id = self.eat_id()
             if self.match(TokenType.EQUALS):
                 expr = self.expression()
                 return Assignment(id, expr)
+            id = VariableCall(id)
+            while self.match(TokenType.DOT):
+                att = self.eat_id()
+                id = AttributeAccess(id, att)
+            if self.match(TokenType.EQUALS):
+                expr = self.expression()
+                return AttributeSet(id, att, expr)
         return False
 
     def eat_list_expression(self):
@@ -397,15 +407,24 @@ class Parser(object):
         if_elif = False
         no_else = True
         token = self.ctoken
+        cond = None
         if self.match(TokenType.IF):
             if_elif = True
+            if not self.match(TokenType.LPAREN):
+                self.error(mes='Expected a paranthesis after conditional token')
             expr = self.expression()
+            if not self.match(TokenType.RPAREN):
+                self.error(mes="Expected a closing paranthesis ')' to finish conditional expression")
             block = self.eat_block()
             conds.append((expr, block))
         while self.match(TokenType.ELIF):
             if not if_elif:
                 self.error(token, mes='Unexpected token for conditional')
+            if not self.match(TokenType.LPAREN):
+                self.error(mes='Expected a paranthesis after conditional token')
             expr = self.expression()
+            if not self.match(TokenType.RPAREN):
+                self.error(mes="Expected a closing paranthesis ')' to finish conditional expression")
             block = self.eat_block()
             conds.append((expr, block))
         if self.match(TokenType.ELSE):
@@ -422,8 +441,6 @@ class Parser(object):
             cond = None
         else:
             cond = conds[-1][1]
-        print(conds)
-        print(cond)
         for i in range(len(conds)-2,0,-1):
             cond = Conditional(conds[i][0], conds[i][1], cond)
         return cond
@@ -440,83 +457,6 @@ class Parser(object):
         if not res:
             res = self.statement()
         return res
-
-"""
-*** Call Stack
-"""
-
-class Rec(Enum):
-    SYSTEM = 'SYSTEM'
-    PROGRAM   = 'PROGRAM'
-    FUNCTION   = 'FUNCTION'
-    METHOD   = 'METHOD'
-
-class CallStack:
-    def __init__(self):
-        self.records = []
-
-    def copy(self, ar):
-        if len(self.records) > 0:
-            ar.members = self.peek().members
-        return ar
-
-    def push(self, ar):
-        ar.init_builtin_frame()
-        self.records.append(ar)
-
-    def pop(self):
-        return self.records.pop()
-
-    def peek(self):
-        return self.records[-1]
-
-    def __str__(self):
-        s = '\n'.join(repr(ar) for ar in reversed(self.records))
-        s = f'CALL STACK\n{s}\n'
-        return s
-
-    def __repr__(self):
-        return self.__str__()
-
-class Record:
-    def __init__(self, name, type, depth):
-        self.name = name
-        self.type = type
-        self.depth = depth
-        self.members = {}
-
-    def __setitem__(self, key, value):
-        self.members[key] = value
-
-    def __getitem__(self, key):
-        return self.members.get(key, False)
-
-    def get(self, key):
-        return self.members.get(key)
-
-    def init_builtin_frame(self):
-        self.members.update({
-            'SYSTEM_RECORD_NAME': self.name,
-            'SYSTEM_RECORD_TYPE': self.type,
-            'SYSTEM_RECORD_DEPTH': self.depth,
-        })
-
-    def __str__(self):
-        lines = [
-            '{level}: {type} {name}'.format(
-                level=self.depth,
-                type=self.type.value,
-                name=self.name,
-            )
-        ]
-        for name, val in self.members.items():
-            lines.append(f'   {name:<20}: {val}')
-
-        s = '\n'.join(lines)
-        return s
-
-    def __repr__(self):
-        return self.__str__()
 
 class SemanticAnalyzer:
     def __init__(self, scope):
@@ -540,9 +480,12 @@ class Interpreter:
         self.callstack = callstack
         self.trace = trace
 
+    """ INTERPRETER METHODS """
+
     def load(self, file, tree):
         self.file = file
         self.tree = tree
+        self.trace.add(type='Interpreting File', file=file)
 
     def interpret(self, file, tree):
         self.load(file, tree)
@@ -550,6 +493,23 @@ class Interpreter:
         if tree is None:
             return str()
         return self.visit(tree)
+
+    def builtins(self):
+        record = self.callstack.peek()
+        record['type'] = FunctionType(SYSTEM_TRACE)
+        record['clock'] = FunctionClock(SYSTEM_TRACE)
+        record['istrue'] = FunctionIstrue(SYSTEM_TRACE)
+        record['repr'] = FunctionRepr(SYSTEM_TRACE)
+        record['print'] = FunctionPrint(SYSTEM_TRACE)
+        record['length'] = FunctionLength(SYSTEM_TRACE)
+
+    """ ERROR HANDLING """
+
+    def error(self, mes, token=None, etype=IvyRuntimeError):
+        self.trace.add(type='Runtime', token=token, framename=self.callstack.peek().name, file=self.file)
+        raise etype(mes, self.trace)
+
+    """ VISITOR NODES """
 
     def visit(self, node):
         if isinstance(node, DataObject) or isinstance(node, Null):
@@ -560,16 +520,12 @@ class Interpreter:
         return visitor(node)
 
     def notfound(self, node):
-        print("No such interpreter node found: " + type(node).__name__)
-
-    def visit_PrintStatement(self, node):
-        expr = self.visit(node.expr)
-        print(expr.printable() if isinstance(expr, IvyObject) else expr)
-        return expr
+        self.error(mes="Cannot interpret ivy code", etype=IvyInterpretationError)
 
     def visit_Program(self, node):
-        program = Record('<main>', Rec.PROGRAM, 1)
+        program = Record('<main>', RecordType.PROGRAM, 1)
         self.callstack.push(program)
+        self.builtins()
         for i in node.block:
             self.visit(i)
         self.callstack.pop()
@@ -629,8 +585,6 @@ class Interpreter:
         elif node.op.type == TokenType.COMP_LTE:
             return left.getop('lte', right)
         elif node.op.type == TokenType.AND:
-            print("detecte adn")
-            print(left)
             return left.getop('and', right)
         elif node.op.type == TokenType.OR:
             return left.getop('or', right)
@@ -651,18 +605,12 @@ class Interpreter:
         elif op == TokenType.NOT:
             return self.visit(node.expr).op_not()
 
-    def visit_VariableDeclaration(self, node):
-        var_type = node.type.type
-        var_name = node.id.value
-        record = self.callstack.peek()
-        record[var_name] = (var_type, Null())
-
     def visit_Assignment(self, node):
         id = node.id.value
         record = self.callstack.peek()
         value = self.visit(node.value)
         if isinstance(value, Function):
-            value.name = id
+            value.reference = id
         record[id] = value
 
     def visit_VariableCall(self, node):
@@ -671,39 +619,47 @@ class Interpreter:
         value = record[var_name]
         if value != False:
             return value
-        print("Variable does not exist")
+        self.error(mes='Name ' + var_name + ' does not exist', token=node.token, etype=IvyNameError)
 
     def visit_FunctionCall(self, node):
-        cur_record = self.callstack.peek()
-        cur_depth = cur_record.depth
         func = self.visit(node.variable)
-        record = self.callstack.copy(Record(func.name, Rec.FUNCTION, cur_depth+1))
-        if len(func.params) != len(node.list_expr):
-            print("Number of arguments given to function do not match number of declared parameters")
-        for n, i in enumerate(func.params):
-            val = self.visit(node.list_expr[n])
-            record[i.value] = val
-        self.callstack.push(record)
-        call = self.visit(func.block)
-        self.callstack.pop()
-        if not call:
-            return Null()
-        return call
+        value = func.call(self, node)
+        return value
 
     def visit_ReturnStatement(self, node):
-        if self.callstack.peek().type != Rec.FUNCTION:
-            print("Return statement should be inside of a function")
+        if self.callstack.peek().type != RecordType.FUNCTION:
+            self.error(mes='Return statement should be inside of a function', token=node.ret)
         to_return = self.visit(node.expr) if node.expr != None else Null()
         return Return(to_return)
 
-    def visit_AttributeCall(self, node):
-        return self.visit(node.variable).attrget(node.attribute.value)
+    def visit_AttributeCall(self, node, access=False):
+        var = self.visit(node.variable)
+        attr = var.attrget(node.attribute.value)
+        if attr:
+            return attr
+        self.error(mes="Object of type '" + var.type + "' does not have the attribute '" + node.attribute.value + "'",
+                   token=node.attribute,
+                   etype=IvyAttributeError)
+
+    def visit_AttributeAccess(self, node):
+        return self.visit_AttributeCall(node)
+
+    def visit_AttributeSet(self, node):
+        att = node.attribute
+        var = self.visit(node.variable.variable)
+        value = self.visit(node.value)
+        if hasattr(var, 'attrset'):
+            var.attrset(att.value, value)
+            return
+        self.error(mes="Object of type '" + var.type + "' does not have the attribute 'attrset'",
+                   token=att,
+                   etype=IvyAttributeError)
 
     def visit_IndexCall(self, node):
         var = self.visit(node.variable)
         index = self.visit(node.index)
         if not hasattr(var, "getitem"):
-            print("This object cannot be called by index!")
+            self.error(mes='Object of type {} cannot be called by index'.format(var.type), etype=IvyIndexError, token=index.token)
         return var.getitem(index)
 
     def visit_MethodCall(self, node):
@@ -755,10 +711,8 @@ class IOModule(Module):
         if os.path.exists(tryfullpath):
             fullpath = tryfullpath
         try:
-            SYSTEM_TRACE.add('Reading file', filepath=fullpath)
             filepath = fullpath
             filename = fullpath.split('/')[-1]
-            SYSTEM_TRACE.add('Creating IOWrapper for file', filepath=fullpath)
             return IOWrapper(filename, filepath)
         except IOError:
             self.error('Cannot find file from specified path')
@@ -814,7 +768,7 @@ class System:
         self.callstack = CallStack()
 
         """ System Modification for the call stack """
-        self.system = Record('<system>', Rec.SYSTEM, 0)
+        self.system = Record('<system>', RecordType.SYSTEM, 0)
         self.callstack.push(self.system)
 
         """ Initialize System Objects """

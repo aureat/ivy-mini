@@ -4,6 +4,7 @@ A programming language written in python.
 # Features
 * Dynamically Typed
 * Expressions and Statements
+* Object Attributes
 * Binary Operations
 * Conditional Control Flow
 * Ternary Conditional
@@ -29,8 +30,8 @@ for (num : nums) {
 ```
 
 ```
-factorial = function(int n) {
-    if n > 1 {
+factorial = function(n) {
+    if (n > 1) {
         return n * factorial(n-1);
     }
     return n;
@@ -127,22 +128,16 @@ string := " [.*] " | ' [.*] '
 ```
 
 ## TO-DO
-- [ ] Fix AND/OR binary operations
-- [ ] Proper syntactical definition for unary not operation (ex. not 16 > 2 etc..)
 - [ ] Complete object model
+- [ ] Finish binary operations
+- [ ] Callstack needs a fix: fibonacci function not working
+- [ ] Build semantic analyzer and symbol tables
 - [ ] Define binary operations on other objects
 - [ ] If-Else Conditionals PERMENANT PATCH
 - [ ] If-Elif conditionals without else blocks
 - [ ] Parameters implementation and call stack creation for blocks
-- [ ] Function-name storing for call stack
-- [ ] Build a return statement for the functions
 - [ ] Parameters for methods for objects
-- [ ] Build semantic analyzer and symbol tables
-- [ ] Type System Error checking
 - [ ] System framework (system module name)
-- [ ] Error handling framework based on call stack
-- [ ] Error processing through trace stack: lexer, parser, interpreter
-- [ ] Collection Data Type
 - [ ] Local and global environment references
 - [ ] Define types in memory, referencing python-implemented objects
 - [ ] Handle type conversions

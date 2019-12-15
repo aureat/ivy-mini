@@ -40,7 +40,8 @@ class IvyObject(object):
     """
 
     """ INITIALIZE IVY OBJECT """
-    def __init__(self, obj_name=None, obj_type=None):
+    def __init__(self, obj_name=None, obj_type=None, token=None):
+        self.token = token
         name = obj_name if obj_name != None else self.getname()
         self.obj_name = name
         self.objdef = {
@@ -66,6 +67,7 @@ class IvyObject(object):
     def attrget(self, att):
         if att in self.objdef:
             return self.objdef[att]
+        return False
 
     def attrset(self, att, val):
         self.objdef[att] = val
@@ -122,9 +124,6 @@ class IvyObject(object):
     def isnull(self): pass
 
     """ LIST """
-    def getitem(self): pass
-    def additem(self): pass
-    def delitem(self): pass
     def length(self): pass
 
     def isfalse(self):
@@ -148,8 +147,8 @@ class IvyObject(object):
         return '<IvyObject.%s at 0x%08x>' % (self.gettype(), id(self))
 
 class Null(IvyObject):
-    def __init__(self):
-        super().__init__(obj_type='Null')
+    def __init__(self, token=None):
+        super().__init__(obj_type='Null', token=token)
 
     def define_op(self, op, other, searchm=False):
         if 'op_'+op in OPMAP.keys():
@@ -162,10 +161,10 @@ class Null(IvyObject):
         return 'null'
 
 class DataObject(IvyObject):
-    def __init__(self, obj_type, data_type=None, data=None):
+    def __init__(self, obj_type, data_type=None, data=None, token=None):
         self.data = data
         self.data_type = data_type if data_type is not None else obj_type
-        super().__init__(obj_type=obj_type)
+        super().__init__(obj_type=obj_type, token=token)
         self.objdef.update({
             'obj_data_type': self.data_type,
             'obj_data': data
@@ -241,14 +240,14 @@ class DataObject(IvyObject):
         return self.data == None
 
     def printable(self):
-        return self.attrget('obj_data')
+        return String(str(self.attrget('obj_data')))
 
     def __repr__(self):
         return '<IvyObject.DataObject.%s (data=%s) at 0x%08x>' % (self.gettype(), self.data, id(self))
 
 class Integer(DataObject):
-    def __init__(self, data):
-        super().__init__(obj_type='Integer', data=data)
+    def __init__(self, data, token=None):
+        super().__init__(obj_type='Integer', data=data, token=token)
 
     def getitem(self, ref):
         if isinstance(ref, Integer):
@@ -286,8 +285,13 @@ class Integer(DataObject):
         return Integer(data)
 
 class Float(DataObject):
-    def __init__(self, data):
-        super().__init__(obj_type='Float', data=data)
+    def __init__(self, data, token=None):
+        super().__init__(obj_type='Float', data=data, token=token)
+
+    def getitem(self, ref):
+        if isinstance(ref, Integer):
+            return String(str(self.data)[ref.data])
+        print("Only integer indexes are allowed for collections!")
 
     def op_plus(self):
         return Integer(self.data)
@@ -322,8 +326,8 @@ class Float(DataObject):
         return Float(data)
 
 class String(DataObject):
-    def __init__(self, data):
-        super().__init__(obj_type='String', data=data)
+    def __init__(self, data, token=None):
+        super().__init__(obj_type='String', data=data, token=token)
         self.objdef.update({
             'length': len(self.data)
         })
@@ -405,16 +409,19 @@ class String(DataObject):
             print('Error: Binary operation not defined for these two types')
         return False
 
+    def toprint(self):
+        return self.data
+
     def op_result(self, data):
         return String(data)
 
 class Boolean(DataObject):
-    def __init__(self, booldata):
+    def __init__(self, booldata, token=None):
         if booldata:
             booldata = 1
         else:
             booldata = 0
-        super().__init__(obj_type='Boolean', data=booldata)
+        super().__init__(obj_type='Boolean', data=booldata, token=token)
 
     def op_plus(self):
         self.undefined()
@@ -461,19 +468,24 @@ class Boolean(DataObject):
         return self.data > 0
 
 class TrueBoolean(Boolean):
-    def __init__(self):
-        super().__init__(booldata=1)
+    def __init__(self, token=None):
+        super().__init__(booldata=1, token=token)
 
 class FalseBoolean(Boolean):
-    def __init__(self):
-        super().__init__(booldata=0)
+    def __init__(self, token=None):
+        super().__init__(booldata=0, token=token)
 
 class Collection(DataObject):
-    def __init__(self, data):
-        super().__init__(obj_type='Collection', data=data)
+    def __init__(self, data, token=None):
+        super().__init__(obj_type='Collection', data=data, token=token)
         self.objdef.update({
             'obj_coll': data
         })
+
+    def op_mult(self, other):
+        if isinstance(other, Integer):
+            return Collection(self.data * other.data)
+        self.undefined()
 
     def getitem(self, ref):
         if isinstance(ref, Integer):
@@ -502,12 +514,13 @@ class Array(DataObject):
         super().__init__(obj_type='arr', data=data)
 
 class Function(IvyObject):
-    def __init__(self, params, code, name='<Function>'):
-        super().__init__(obj_type='Function')
+    def __init__(self, params, code, name='<Function>', token=None):
+        super().__init__(obj_type='Function', token=token)
         self.name = name
         self.params = params
         self.block = code
         self.objdef.update({
+            'func_name': name,
             'obj_params': params,
             'obj_code': code, # stores a code object
         })

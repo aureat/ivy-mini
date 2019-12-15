@@ -1,0 +1,10 @@
+closure = function(n) {
+
+    return function(n) {
+        return n*100;
+    };
+
+};
+
+multiplier = closure();
+print multiplier();
