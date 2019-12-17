@@ -63,6 +63,11 @@ class InternalFile:
         self.counter += 1
         return token
 
+    def back(self):
+        self.counter -= 1
+        token = self.tokens[self.counter]
+        return token
+
     def peek(self, amount=0):
         amount = amount if amount > 0 else 0
         return self.tokens[self.counter + amount]
@@ -71,9 +76,10 @@ class InternalFile:
 *** PARSER
 """
 
+ObjMachine = ObjectMachine(SYSTEM_TRACE)
+
 class Parser(object):
-    def __init__(self, file=None, trace=None, objmachine=None):
-        self.objmachine = objmachine
+    def __init__(self, file=None, trace=None):
         self.trace = trace
         self.file = file
         self.ctoken = None
@@ -105,6 +111,9 @@ class Parser(object):
     """ TOKEN METHODS """
     def next_token(self):
         self.ctoken = self.file.next()
+
+    def back(self):
+        self.ctoken = self.file.back()
 
     def peek_match(self, token_type, amount=0):
         if self.file.counter < self.file.toklen:
@@ -145,13 +154,13 @@ class Parser(object):
             if not self.current(TokenType.R_SQ_BRACK):
                 coll = [self.expression()]
                 while self.match(TokenType.COMMA):
-                    if not self.current(TokenType.R_SQ_BRACK):
-                        coll.append(self.expression())
+                    coll.append(self.expression())
+                if self.match(TokenType.COMMA): pass
                 if self.match(TokenType.R_SQ_BRACK):
-                    return self.objmachine.new(coll, token)
+                    return ObjMachine.new(coll, token)
                 self.error(mes='Expected a closing `]` to finish collection')
             elif self.match(TokenType.R_SQ_BRACK):
-                return self.objmachine.new([], token)
+                return ObjMachine.new([], token)
         return False
 
     def atom(self):
@@ -165,34 +174,38 @@ class Parser(object):
         elif self.match(TokenType.MINUS):
             res=UnaryOp(token, self.atom())
         elif self.match(TokenType.TRUE):
-            res = self.objmachine.fromtoken(token)
+            res = ObjMachine.fromtoken(token)
         elif self.match(TokenType.FALSE):
-            res = self.objmachine.fromtoken(token)
+            res = ObjMachine.fromtoken(token)
         elif self.match(TokenType.NULL):
-            res = self.objmachine.fromtoken(token)
+            res = ObjMachine.fromtoken(token)
         elif self.match(TokenType.BOOLEAN_CONST):
-            res= self.objmachine.fromtoken(token)
+            res= ObjMachine.fromtoken(token)
         elif self.match(TokenType.INTEGER_CONST):
-            res= self.objmachine.fromtoken(token)
+            res= ObjMachine.fromtoken(token)
         elif self.match(TokenType.FLOAT_CONST):
-            res= self.objmachine.fromtoken(token)
+            res= ObjMachine.fromtoken(token)
         elif self.match(TokenType.D_QUOTE):
             string = self.eatdef(TokenType.STRING_CONST)
             self.eatdef(TokenType.D_QUOTE)
-            res= self.objmachine.fromtoken(string)
+            res= ObjMachine.fromtoken(string)
         elif self.match(TokenType.S_QUOTE):
             string = self.eatdef(TokenType.STRING_CONST)
             self.eatdef(TokenType.S_QUOTE)
-            res= self.objmachine.fromtoken(string)
+            res= ObjMachine.fromtoken(string)
         elif self.match(TokenType.LPAREN):
             do_attr = False
             res= self.expression()
             if not self.match(TokenType.RPAREN):
                 self.error(mes='Expected a closing parantheses `)` to finish expression')
         elif self.current(TokenType.FUNCTION):
+            do_attr = False
             res = self.function_expression()
         else:
+            print("get iden")
+            print(self.ctoken)
             if self.match(TokenType.IDENTIFIER):
+                print(self.ctoken)
                 res = VariableCall(token)
             else:
                 return None
@@ -272,11 +285,24 @@ class Parser(object):
             if self.match(TokenType.LPAREN):
                 list_decl = self.eat_list_decl()
                 if not self.match(TokenType.RPAREN):
-                    self.error('Expected a closing parantheses')
+                    self.error(mes='Expected a closing parantheses')
                 if not self.current(TokenType.LBRACK):
-                    self.error('Expected a block to define anonymous function')
+                    self.error(mes='Expected a block to define anonymous function')
+                block = self.eat_block(single=False)
+                return Function(params=list_decl, code=block, token=token, trace=SYSTEM_TRACE)
+
+    def eat_function_decl(self):
+        print(self.ctoken)
+        if self.match(TokenType.FUNC):
+            print(self.ctoken)
+            if self.match(TokenType.LPAREN):
+                id = self.eat_id()
+                list_decl = self.eat_list_decl()
+                print("do func decl")
+                if not self.match(TokenType.RPAREN):
+                    self.error(mes='Expected a closing parantheses')
                 block = self.eat_block()
-                return self.objmachine.callable(list_decl, block, token)
+                return Function(name=id.value, params=list_decl, code=block, token=token, trace=SYSTEM_TRACE)
 
     """ STATEMENTS """
     def statement(self):
@@ -313,19 +339,34 @@ class Parser(object):
 
     """ SYNTAX 'EATERS' """
     def eat_assignment(self):
-        if self.current(TokenType.IDENTIFIER) and (self.peek_match(TokenType.EQUALS, 1) or self.peek_match(TokenType.DOT, 1)):
-            id = self.eat_id()
-            if self.match(TokenType.EQUALS):
-                expr = self.expression()
-                return Assignment(id, expr)
-            id = VariableCall(id)
-            while self.match(TokenType.DOT):
-                att = self.eat_id()
-                id = AttributeAccess(id, att)
-            if self.match(TokenType.EQUALS):
-                expr = self.expression()
-                return AttributeSet(id, att, expr)
+        if self.current(TokenType.IDENTIFIER):
+            if self.peek_match(TokenType.EQUALS, 1):
+                id = self.eat_id()
+                if self.match(TokenType.EQUALS):
+                    expr = self.expression()
+                    return Assignment(id, expr)
+            if self.peek_match(TokenType.DOT, 1):
+                id = self.eat_id()
+                counter = 1
+                id = VariableCall(id)
+                while self.match(TokenType.DOT):
+                    att = self.eat_id()
+                    id = AttributeAccess(id, att)
+                    counter += 2
+                if self.match(TokenType.EQUALS):
+                    expr = self.expression()
+                    return AttributeSet(id, att, expr)
+                for i in range(counter+1):
+                    self.back()
         return False
+
+    def get_id(self):
+        token = self.ctoken
+        if self.current(TokenType.IDENTIFIER):
+            if token.value in RESERVED_KEYWORDS:
+                self.error(token, 'Cannot use identifier name')
+            return token
+        self.error(token, 'Expected an identifier')
 
     def eat_list_expression(self):
         getexpr = self.expression()
@@ -336,12 +377,15 @@ class Parser(object):
 
     def eat_call(self, expr):
         token = self.ctoken
+        print("eat call")
+        print(token)
         if self.match(TokenType.DOT):
             attr = self.ctoken
             if self.match(TokenType.IDENTIFIER):
                 return AttributeCall(expr, attr)
             self.error(mes='Expected an identifier to finish attribute call')
         elif self.match(TokenType.LPAREN):
+            print("func call")
             list_expr = self.eat_list_expression()
             if self.match(TokenType.RPAREN):
                 return FunctionCall(expr, list_expr)
@@ -365,8 +409,10 @@ class Parser(object):
 
     def eat_list_decl(self):
         params = []
+        print(self.ctoken)
         if self.current(TokenType.IDENTIFIER):
             params = [self.eat_id()]
+            print(params)
             while self.match(TokenType.COMMA):
                 params.append(self.eat_id())
             if self.match(TokenType.COMMA): pass
@@ -379,105 +425,76 @@ class Parser(object):
 
     def eat_id(self):
         token = self.ctoken
+        print("about to eat id")
+        print(token)
         if self.match(TokenType.IDENTIFIER):
             if token.value in RESERVED_KEYWORDS:
                 self.error(token, 'Cannot use identifier name')
             return token
         self.error(token)
 
+    def eat_funcblock(self):
+        if self.match(TokenType.FUNCTION):
+            if self.match(TokenType.LPAREN):
+                params = self.eat_list_decl()
+                if not self.match(TokenType.RPAREN):
+                    self.error(mes='Expected a closing parantheses')
+                block = self.eat_block()
+                return Function(params=params, code=block)
+
     def eat_block(self, single=True):
+        print(self.ctoken)
         if self.match(TokenType.LBRACK):
+            print("enter block")
             block = self.program(TokenType.RBRACK)
             if not self.match(TokenType.RBRACK):
                 self.error(mes='Expected a closing bracket to finish block')
             return Block(block)
         if single:
-            stmt = self.statement()
-            return Block([stmt])
+            return self.statement()
 
     def eat_conditional(self):
+        conds = []
+        if_elif = False
+        no_else = True
+        token = self.ctoken
+        cond = None
         if self.match(TokenType.IF):
+            if_elif = True
             if not self.match(TokenType.LPAREN):
                 self.error(mes='Expected a paranthesis after conditional token')
-            cond = self.expression()
+            expr = self.expression()
             if not self.match(TokenType.RPAREN):
                 self.error(mes="Expected a closing paranthesis ')' to finish conditional expression")
-            ifblock = self.eat_block()
-            elseblock=None
-            if self.match(TokenType.ELSE):
-                if self.current(TokenType.IF):
-                    elseblock = self.eat_conditional()
-                else:
-                    elseblock = self.eat_block()
-            return Conditional(cond, ifblock, elseblock)
-
-    # def eat_conditional(self):
-    #     conds = []
-    #     if_elif = False
-    #     no_else = True
-    #     token = self.ctoken
-    #     cond = None
-    #     if self.match(TokenType.IF):
-    #         if_elif = True
-    #         if not self.match(TokenType.LPAREN):
-    #             self.error(mes='Expected a paranthesis after conditional token')
-    #         expr = self.expression()
-    #         if not self.match(TokenType.RPAREN):
-    #             self.error(mes="Expected a closing paranthesis ')' to finish conditional expression")
-    #         block = self.eat_block()
-    #         conds.append((expr, block))
-    #     while self.match(TokenType.ELIF):
-    #         if not if_elif:
-    #             self.error(token, mes='Unexpected token for conditional')
-    #         if not self.match(TokenType.LPAREN):
-    #             self.error(mes='Expected a paranthesis after conditional token')
-    #         expr = self.expression()
-    #         if not self.match(TokenType.RPAREN):
-    #             self.error(mes="Expected a closing paranthesis ')' to finish conditional expression")
-    #         block = self.eat_block()
-    #         conds.append((expr, block))
-    #     if self.match(TokenType.ELSE):
-    #         if not if_elif:
-    #             self.error(token, mes='Unexpected token for conditional')
-    #         block = self.eat_block()
-    #         conds.append((None, block))
-    #         no_else = False
-    #     if len(conds) == 0:
-    #         return False
-    #     if len(conds) == 1:
-    #         return Conditional(expr, block, None)
-    #     if no_else:
-    #         cond = None
-    #     else:
-    #         cond = conds[-1][1]
-    #     for i in range(len(conds)-2,0,-1):
-    #         cond = Conditional(conds[i][0], conds[i][1], cond)
-    #     print("return conditional node")
-    #     print(cond)
-    #     return cond
-
-    def eat_while(self):
-        token = self.ctoken
-        if self.match(TokenType.WHILE):
-            if self.match(TokenType.LPAREN):
-                expr = self.expression()
-                if not self.match(TokenType.RPAREN):
-                    self.error(mes='Expected a closing parantheses')
-                block = self.eat_block()
-                return WhileLoop(token, expr, block)
-            self.error(mes='Expected an opening parantheses')
-
-    def eat_for(self): pass
-
-    def eat_function_decl(self):
-        if self.match(TokenType.FUNCTION):
-            id = self.eat_id()
-            if self.match(TokenType.LPAREN):
-                list_decl = self.eat_list_decl()
-                if not self.match(TokenType.RPAREN):
-                    self.error(mes='Expected a closing parantheses')
-                block = self.eat_block()
-                return Assignment(id, self.objmachine.callable(list_decl, block, id, id.value))
+            block = self.eat_block()
+            conds.append((expr, block))
+        while self.match(TokenType.ELIF):
+            if not if_elif:
+                self.error(token, mes='Unexpected token for conditional')
+            if not self.match(TokenType.LPAREN):
+                self.error(mes='Expected a paranthesis after conditional token')
+            expr = self.expression()
+            if not self.match(TokenType.RPAREN):
+                self.error(mes="Expected a closing paranthesis ')' to finish conditional expression")
+            block = self.eat_block()
+            conds.append((expr, block))
+        if self.match(TokenType.ELSE):
+            if not if_elif:
+                self.error(token, mes='Unexpected token for conditional')
+            block = self.eat_block()
+            conds.append((None, block))
+            no_else = False
+        if len(conds) == 0:
+            return False
+        if len(conds) == 1:
+            return Conditional(expr, block, None)
+        if no_else:
+            cond = None
+        else:
+            cond = conds[-1][1]
+        for i in range(len(conds)-2,0,-1):
+            cond = Conditional(conds[i][0], conds[i][1], cond)
+        return cond
 
     """ PROGRAM """
     def program(self, endtok=TokenType.EOF):
@@ -487,16 +504,9 @@ class Parser(object):
         return prog
 
     def eat_program(self):
-        if self.current(TokenType.IF):
-            res = self.eat_conditional()
-        elif self.current(TokenType.FUNCTION):
-            res = self.eat_function_decl()
-        elif self.current(TokenType.WHILE):
-            res = self.eat_while()
-        elif self.current(TokenType.FOR):
-            res = self.eat_for()
-        else:
-            res = self.statement()
+        res = self.eat_conditional()
+        if not res: res = self.eat_function_decl()
+        if not res: res = self.statement()
         return res
 
 class SemanticAnalyzer:
@@ -537,21 +547,12 @@ class Interpreter:
 
     def builtins(self):
         record = self.callstack.peek()
-        record['type'] = FunctionType(SYSTEM_TRACE, self)
-        record['clock'] = FunctionClock(SYSTEM_TRACE, self)
-        record['istrue'] = FunctionIstrue(SYSTEM_TRACE, self)
-        record['istype'] = FunctionIstype(SYSTEM_TRACE, self)
-        record['repr'] = FunctionRepr(SYSTEM_TRACE, self)
-        record['printable'] = FunctionPrintable(SYSTEM_TRACE, self)
-        record['print'] = FunctionPrint(SYSTEM_TRACE, self)
-        record['length'] = FunctionLength(SYSTEM_TRACE, self)
-        record['callable'] = FunctionCallable(SYSTEM_TRACE, self)
-        record['indexable'] = FunctionIndexable(SYSTEM_TRACE, self)
-        #record['call'] = FunctionCallFn(SYSTEM_TRACE)
-        record['attrget'] = FunctionAttrget(SYSTEM_TRACE, self)
-        record['attrset'] = FunctionAttrset(SYSTEM_TRACE, self)
-        record['attrhas'] = FunctionAttrhas(SYSTEM_TRACE, self)
-        record['attrdel'] = FunctionAttrdel(SYSTEM_TRACE, self)
+        record['type'] = FunctionType(SYSTEM_TRACE)
+        record['clock'] = FunctionClock(SYSTEM_TRACE)
+        record['istrue'] = FunctionIstrue(SYSTEM_TRACE)
+        record['repr'] = FunctionRepr(SYSTEM_TRACE)
+        record['print'] = FunctionPrint(SYSTEM_TRACE)
+        record['length'] = FunctionLength(SYSTEM_TRACE)
 
     """ ERROR HANDLING """
 
@@ -584,22 +585,24 @@ class Interpreter:
         for i in node.block:
             exc = self.visit(i)
             if isinstance(exc, Return):
-                return exc
-            if isinstance(exc, BreakLoop):
-                return exc
-            if isinstance(exc, ContinueLoop):
-                return exc
+                return exc.to_return
 
     def visit_Function(self, node):
-        node.interpreter = self
         return node
 
     def visit_Conditional(self, node):
         comp = self.visit(node.condition)
         if comp.istrue():
-            return self.visit(node.ifblock)
-        elif node.elseblock is not None:
-            return self.visit(node.elseblock)
+            for i in node.ifblock.block:
+                exc = self.visit(i)
+                if isinstance(exc, Return):
+                    return exc
+        else:
+            if node.elseblock is not None:
+                for i in node.elseblock.block:
+                    exc = self.visit(i)
+                    if isinstance(exc, Return):
+                        return exc
 
     def visit_CompoundStatement(self, node):
         for stmt in node.compound:
@@ -658,7 +661,6 @@ class Interpreter:
         record = self.callstack.peek()
         value = self.visit(node.value)
         if isinstance(value, Function):
-            value.anonymous = False
             value.reference = id
         record[id] = value
 
@@ -672,29 +674,7 @@ class Interpreter:
 
     def visit_FunctionCall(self, node):
         func = self.visit(node.variable)
-        value = func.call(node)
-        return value
-
-    def visit_WhileLoop(self, node):
-        comp = self.visit(node.condition)
-        while comp.istrue():
-            loop = None
-            exc = self.visit(node.block)
-            if isinstance(exc, BreakLoop): break
-            if isinstance(exc, ContinueLoop): continue
-            if isinstance(exc, Return): return exc
-            comp = self.visit(node.condition)
-
-    def visit_BreakLoop(self, node):
-        return node
-
-    def visit_ContinueLoop(self, node):
-        return node
-
-    def call(self, func, token, params):
-        func.interpreter = self
-        node = FunctionCall(token, params)
-        value = func.call(node)
+        value = func.call(self, node)
         return value
 
     def visit_ReturnStatement(self, node):
@@ -719,12 +699,11 @@ class Interpreter:
         att = node.attribute
         var = self.visit(node.variable.variable)
         value = self.visit(node.value)
-        if isinstance(value, Function):
-            value.anonymous = False
-            value.reference = att.value
         if hasattr(var, 'attrset'):
             var.attrset(att.value, value)
             return
+        if isinstance(value, Function):
+            value.reference = id
         self.error(mes="Object of type '" + var.type + "' does not have the attribute 'attrset'",
                    token=att,
                    etype=IvyAttributeError)
@@ -847,9 +826,8 @@ class System:
 
         """ Initialize System Objects """
         self.lexer = Lexer(trace=SYSTEM_TRACE)
+        self.parser = Parser(trace=SYSTEM_TRACE)
         self.interpreter = Interpreter(callstack=self.callstack, trace=SYSTEM_TRACE)
-        self.objmachine = ObjectMachine(self.interpreter)
-        self.parser = Parser(trace=SYSTEM_TRACE, objmachine=self.objmachine)
 
     """ LEXER METHODS """
 

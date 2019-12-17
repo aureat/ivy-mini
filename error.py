@@ -103,3 +103,7 @@ class IvyValueError(Error):
 class IvyZeroDivisionError(Error):
     def __init__(self, desc, trace):
         super().__init__(desc, 'ZeroDivisionError', trace)
+
+class IvyIterationError(Error):
+    def __init__(self, desc, trace):
+        super().__init__(desc, 'IterationError', trace)

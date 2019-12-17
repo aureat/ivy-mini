@@ -1,9 +1,99 @@
-num = 43;
-print(num.istrue());
-num.istrue = function() {
-    return false;
-};
-print(num.istrue());
+// Test Return in a while within a function
+function test_return() {
+    counter = 0;
+    while(true) {
+        print(counter);
+        if(counter==5) return 10;
+            else counter = counter + 1;
+    }
+    return true;
+}
+print(test_return());
+
+// func gettype(object) {
+//     return object.inspect.type;
+// }
+// num = 43;
+// num.gettype = gettype;
+// print(num.gettype(num));
+
+// counter = 0;
+// while(true) {
+//     if(counter == 10) {
+//         break;
+//     }
+//     print(counter);
+//     counter = counter + 1;
+// }
+
+// counter = 0;
+// while(counter < 10) {
+//     counter = counter + 1;
+//     if(counter==7) {
+//         continue;
+//     }
+//     print(counter);
+// }
+
+// print(repr(istype(43, 'hey')));
+//
+// print("start");
+//
+// print(clock());
+// print("Start of program");
+// num = 43;
+// print(num.attrdel('istrue'));
+// print(num.attrhas('istrue'));
+// print(num.istrue());
+// print(type(num.istrue));
+// num.istrue = function() {
+//     return "hello";
+// };
+// print(type(num.istrue));
+// print(istype(num, "af"));
+// print(num.istype("nah"));
+// print(repr(istype(num, 'hey')));
+// print(istype(num, [1,2,3]));
+// print("changing istype");
+// // num.istype = function(str) {
+// //     if(str == num.inspect.type) {
+// //         print("true");
+// //         return true;
+// //     } else {
+// //         print("false");
+// //         return false;
+// //     }
+// // };
+// num.istype = function(str) {
+//     return num.inspect.type;
+// };
+// print(num.istype.inspect.type);
+// print(istype(num, 'hey'));
+// print(repr(num));
+// print(repr(num.istype));
+// print(repr(istype(num, 'hey')));
+// x = num.newObject("hey");
+// print(type(x));
+// print(callable(num.istype));
+// print("End of program");
+// print(clock());
+
+// func getname(object) {
+//     return object.inspect.type;
+// }
+//
+// // iterations & lists
+//
+// for (i in [1..5]) { ... }
+//
+// for (i in [1..5 :2]) { ... }
+//
+// for (i in "hello") { ... }
+//
+// for (i in [1, 2, 3]) { ... }
+//
+// while (true) { ... }
+
 
 // // Inspection & Access
 // object.inspect.*;

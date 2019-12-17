@@ -1,15 +1,14 @@
 """
-*** SYSTEM OBJECTS
-
-(1) Object Priority: Collection > String > Float > Integer > Boolean
+***  IVY Language Interpreter
+***  Universe Objects
 
 """
-
 from error import *
 from tokentype import TokenType
 from callstack import RecordType, Record
 from datetime import datetime
 
+""" OBJECT TYPES """
 TYPES = ['Integer', 'Float', 'String', 'Boolean', 'Collection', 'Function']
 
 """ OPERATIONS ON OBJECTS """
@@ -34,227 +33,159 @@ BINOPMAP = {
     'op_plus': lambda x: +x,
 }
 
-""" OBJECT CLASSES """
-
+""" OBJECT MACHINE """
 class ObjectMachine(object):
-    def __init__(self, trace):
-        self.trace = trace
+    def __init__(self, interpreter):
+        self.interpreter = interpreter
+        self.trace = interpreter.trace
 
     def new(self, obj, token=None):
         trace = self.trace
         if isinstance(obj, int):
-            return Integer(obj, token, trace)
+            return Integer(obj, token, trace, self.interpreter)
         elif isinstance(obj, float):
-            return Float(obj, token, trace)
+            return Float(obj, token, trace, self.interpreter)
         elif isinstance(obj, str):
-            return String(obj, token, trace)
+            return String(obj, token, trace, self.interpreter)
         elif isinstance(obj, bool):
-            return Boolean(obj, token, trace)
+            return Boolean(obj, token, trace, self.interpreter)
         elif isinstance(obj, list):
-            return Collection(obj, token, trace)
+            return Collection(obj, token, trace, self.interpreter)
         elif callable(obj):
-            return PFunction(obj, token, trace)
+            return BuiltinMethod(obj, token, trace, self.interpreter)
 
     def fromtoken(self, token=None):
         trace = self.trace
         if token.type == TokenType.INTEGER_CONST:
-            return Integer(token.value, token, trace)
+            return Integer(token.value, token, trace, self.interpreter)
         elif token.type == TokenType.FLOAT_CONST:
-            return Float(token.value, token, trace)
+            return Float(token.value, token, trace, self.interpreter)
         elif token.type == TokenType.STRING_CONST:
-            return String(token.value, token, trace)
+            return String(token.value, token, trace, self.interpreter)
         elif token.type == TokenType.TRUE:
-            return Boolean(1, token, trace)
+            return Boolean(1, token, trace, self.interpreter)
         elif token.type == TokenType.FALSE:
-            return Boolean(0, token, trace)
+            return Boolean(0, token, trace, self.interpreter)
         elif token.type == TokenType.NULL:
-            return Null(token, trace)
+            return Null(token, trace, self.interpreter)
 
+    def callable(self, params, code, token, name=None):
+        return Function(name=name, params=params, code=code, token=token, trace=self.trace, interpreter=self.interpreter)
+
+""" IVY OBJECT """
 class IvyObject(object):
 
-    """
-        ABSTRACT CLASS for Ivy Objects
-        * Objdef Attribute: object definition of an ivy object
-        * Access Method: gives access to all attributes of an ivy object
-        * Inspect Method: gives access to all object definition of an ivy object
-        * Attributes attr.: object attributes
-
-    """
-
-    """ INITIALIZE IVY OBJECT """
-    def __init__(self, name=None, type=None, token=None, trace=None):
+    """ INITIALIZE ATTRIBUTES """
+    def __init__(self, name=None, type=None, token=None, trace=None, interpreter=None):
 
         """ Object Attributes """
         self.classname = self.__class__.__name__
         self.name = name if name != None else self.classname
         self.type = type if type != None else self.classname
+        self.interpreter = interpreter
         self.token = token
         self.trace = trace
 
         """ Object Attributes """
         self.attributes = {
-            'istrue': BuiltinMethod(boundclass=self, func=self.istrue, params=[], name='istrue', token=self.token, trace=self.trace)
+            'callable': self.newmethod(self.callable, [], 'callable'),
+            'indexable': self.newmethod(self.indexable, [], 'indexable'),
+            'istrue': self.newmethod(self.istrue, [], 'istrue'),
+            'istype': self.newmethod(self.istype, ['type'], 'istype'),
+            'repr': self.newmethod(self.representation, [], 'repr'),
+            'newObject': self.newmethod(self.newobj, ['obj'], 'newObject'),
+            'attrget': self.newmethod(self.attrget, ['attr'], 'attrget'),
+            'attrset': self.newmethod(self.attrset, ['attr', 'value'], 'attrset'),
+            'attrhas': self.newmethod(self.attrhas, ['attr'], 'attrhas'),
+            'attrdel': self.newmethod(self.attrdel, ['attr'], 'attrdel'),
+            'isnull': self.newmethod(self.isnull, [], 'isnull'),
+            'printable': self.newmethod(self.printable, [], 'printable'),
         }
 
-        """ Initial Object Definition """
+        """ Object Definition """
         self.objdef = AttributeObject({
             'name': self.name,
             'type': self.type,
-            'self': self.getobj(),
             'class': self.getclass,
             'classname': self.classname,
-            'attributes': self.attributes,
-        }, 'inspect', self.token, self.trace)
+            'instance': self.getinstance(),
+            'callable': False,
+            'indexable': False,
+            'isnull': False,
+            'istrue': True,
+        },
+            'inspect', self.token, self.trace, self.interpreter)
         self.attributes['inspect'] =  self.objdef
 
+    """ OBJECT METHODS """
     def newobj(self, obj, token=None):
         token = self.token if token is None else token
-        if isinstance(obj, int):
-            return Integer(obj, token, self.trace)
+        if isinstance(obj, bool):
+            return Boolean(obj, token, self.trace, self.interpreter)
+        elif isinstance(obj, int):
+            return Integer(obj, token, self.trace, self.interpreter)
         elif isinstance(obj, float):
-            return Float(obj, token, self.trace)
+            return Float(obj, token, self.trace, self.interpreter)
         elif isinstance(obj, str):
-            return String(obj, token, self.trace)
-        elif isinstance(obj, bool):
-            return Boolean(obj, token, self.trace)
+            return String(obj, token, self.trace, self.interpreter)
         elif obj == 'null':
-            return Null(token, self.trace)
+            return Null(token, self.trace, self.interpreter)
         elif isinstance(obj, list):
-            return Collection(obj, token, self.trace)
+            return Collection(obj, token, self.trace, self.interpreter)
         elif callable(obj):
-            return PFunction(obj, token, self.trace)
+            return self.newmethod(obj, [], obj.__name__)
         return obj
-
+    def newmethod(self, func, params, name):
+        return BuiltinMethod(boundclass=self, func=func, params=params, name=name, token=self.token, trace=self.trace, interpreter=self.interpreter)
     def trynew(self, item, obj, type):
         try:
             n = obj(item)
             return n
         except ValueError:
             self.error('Casting ' + type(obj).__name__, etype=IvyValueError, mes='Cannot create a new ' + type + ' object')
-
-    "ALL PROPERTIES"
-    if True:
-        pass
-        """
-            Ivy Object Binary Operations
-            * op_add
-            * op_sub
-            * op_mult
-            * op_div
-            * op_mod
-            * op_pow
-            * op_lt
-            * op_lte
-            * op_gt
-            * op_gte
-            * op_eq
-            * op_eq_not
-            * op_not
-            * op_in
-            * op_ideq
-            * op_ideq_not
-            * op_minus
-            * op_plus
-
-            General Ivy Object Methods
-            * error
-            * undefined
-            * istrue
-            * isfalse
-            * getprop
-            * setprop
-            * delprop
-            * attrget
-            * attrset
-            * attrdel
-            * getmethod
-            * istype
-            * kill : delete reference, leave for python garbage collection
-            * printable
-            * inspect
-            * access
-
-            Ivy Object Type-specific Methods
-            * next
-            * iterate
-            * isnull
-            * length
-            * getitem
-            * setitem
-            * delitem
-
-        """
-
-    """ Method Execution """
-    def domethod(self): pass
+    def getobjdef(self, name):
+        return self.newobj(self.objdef[name])
 
     """ Binary Operations """
-    def op_ideq(self, other):
-        return Boolean(self.type == other.type)
+    def op_ideq(self, other): return Boolean(self.type == other.type)
+    def op_ideq_not(self, other): return Boolean(self.type == other.type)
+    def getop(self, attr, other): return self.dobinop(attr, other)
 
-    def op_ideq_not(self, other):
-        return Boolean(self.type == other.type)
-
-    def getop(self, attr, other):
-        return self.dobinop(attr, other)
-
-    """ Python Attributes """
-    def getprop(self, att):
-        return getattr(self, att, False)
-
-    def setprop(self, att, val):
-        setattr(self, att, val)
-
-    def delprop(self, att):
-        delattr(self, att)
-
+    """ OBJECT ATTRIBUTES """
     def attrget(self, att):
         if att in self.attributes:
             return self.newobj(self.attributes[att])
         return False
-
     def attrset(self, att, val):
-        self.attributes[att] = val
-
+        self.attributes[att] = self.newobj(val)
     def attrdel(self, att):
-        del self.attributes[att]
-
-    def getmethod(self, att):
-        if att in self.objdef:
-            if callable(self.objdef[att]):
-                return self.objdef[att]
-        getmet = self.getprop(att)
-        if callable(getmet):
-            return getmet
+        if att in self.attributes:
+            del self.attributes[att]
+    def attrhas(self, att):
+        if att in self.attributes:
+            return Boolean(True)
         return Boolean(False)
 
     """ OBJECT INFORMATION """
     def getclass(self):
-        return IvyObject
-
-    def getobj(self):
-        return self
-
+        return self.newobj(self.objdef['class'])
     def gettype(self):
-        return self.type
-
+        return self.newobj(self.objdef['type'])
+    def getinstance(self):
+        return self
+    def callable(self):
+        return self.objdef['callable']
+    def indexable(self):
+        return self.objdef['indexable']
     def istype(self, other):
-        if isinstance(other, String):
-            if self.type == other.data:
+        if isinstance(other, str):
+            if self.objdef['type'].data == other:
                 return Boolean(True)
         return Boolean(False)
-
     def istrue(self):
-        return Boolean(True)
-
-    def isfalse(self):
-        return Boolean(not bool(self.istrue()))
-
+        return self.objdef['istrue']
     def isnull(self):
-        return Boolean(False)
-
-    def getobj(self):
-        return self
+        return self.objdef['isnull']
 
     """ ERROR REPORTING """
     def error(self, type, etype, mes, token=None):
@@ -262,37 +193,32 @@ class IvyObject(object):
         file = self.trace.peek()['file']
         self.trace.add(type=type, file=file, token=token)
         raise etype(mes, self.trace)
-
     def undefined(self, op, mes="", type1=None, type2=None):
         mes = "Operation '%s' not defined for types '%s' and '%s'" % (op, type1, type2) if mes == "" else mes
         self.error(type='Undefined Operation', etype=IvyUndefinedOperation, mes=mes)
 
     """ TO STRING METHODS """
     def newprintable(self, string):
-        return String(string, token=self.token, trace=self.trace)
-
+        return self.newobj(string)
     def representation(self):
         return self.newprintable("<Ivy Object of type '%s' at 0x%08x>" % (self.type, id(self)))
-
     def printable(self):
         return self.newprintable(self.representation())
-
     def toprint(self):
         return self.representation().toprint()
-
     def __repr__(self):
         return self.toprint()
-
     def __str__(self):
         return self.toprint()
 
 class AttributeObject(IvyObject):
-    def __init__(self, objdef, name='attr', token=None, trace=None):
+    def __init__(self, objdef, name='attr', token=None, trace=None, interpreter=None):
         self.type = name
         self.name = name
         self.token = token
         self.trace = trace
         self.attributes = objdef
+        self.interpreter=interpreter
 
     def __getitem__(self, att):
         return self.newobj(self.attributes[att])
@@ -306,7 +232,7 @@ class AttributeObject(IvyObject):
     def attrget(self, att):
         if att in self.attributes:
             return self.newobj(self.attributes[att])
-        return False
+        return Boolean(False)
 
     def attrset(self, att, val):
         self.attributes[att] = val
@@ -315,28 +241,25 @@ class AttributeObject(IvyObject):
         self.attributes.pop(att)
 
 class Null(IvyObject):
-    def __init__(self, token=None, trace=None):
-        super().__init__(type='Null', token=token, trace=trace)
+    def __init__(self, token=None, trace=None, interpreter=None):
+        super().__init__(type='Null', token=token, trace=trace, interpreter=interpreter)
+        self.objdef['istrue'] = False
+        self.objdef['isnull'] = True
 
     def dobinop(self, op, other, searchm=False):
         if 'op_'+op in BINOPMAP.keys():
             self.undefined(op, mes="No binary operation for object of type 'Null' is allowed!")
         self.undefined(op, mes="No operation for object of type 'Null' is allowed!")
 
-    def isnull(self):
-        return Boolean(True)
-
-    def istrue(self):
-        return Boolean(False)
-
     def printable(self):
         return self.newprintable('null')
 
 class DataObject(IvyObject):
-    def __init__(self, type=None, data=None, token=None, trace=None):
+    def __init__(self, type=None, data=None, token=None, trace=None, interpreter=None):
         self.data = data
-        super().__init__(type=type, token=token, trace=trace)
+        super().__init__(type=type, token=token, trace=trace, interpreter=interpreter)
         self.objdef['data'] = data
+        self.objdef['istrue'] = True
 
     def op_lt(self, other):
         if isinstance(other, Integer):
@@ -397,12 +320,11 @@ class DataObject(IvyObject):
     def printable(self):
         return self.newprintable(self.toprint())
 
-    def istrue(self):
-        return Boolean(True)
-
 class Integer(DataObject):
-    def __init__(self, data, token=None, trace=None):
-        super().__init__(type='Integer', data=self.trynew(data, int, 'Integer'), token=token, trace=trace)
+    def __init__(self, data, token=None, trace=None, interpreter=None):
+        super().__init__(type='Integer', data=self.trynew(data, int, 'Integer'), token=token, trace=trace, interpreter=interpreter)
+        self.objdef['indexable'] = True
+        self.objdef['istrue'] = True
 
     def getitem(self, ref):
         if isinstance(ref, Integer):
@@ -445,8 +367,9 @@ class Integer(DataObject):
         return Integer(data)
 
 class Float(DataObject):
-    def __init__(self, data, token=None, trace=None):
-        super().__init__(type='Float', data=self.trynew(data, float, 'Float'), token=token, trace=trace)
+    def __init__(self, data, token=None, trace=None, interpreter=None):
+        super().__init__(type='Float', data=self.trynew(data, float, 'Float'), token=token, trace=trace, interpreter=interpreter)
+        self.objdef['indexable'] = True
 
     def getitem(self, ref):
         if isinstance(ref, Integer):
@@ -482,10 +405,18 @@ class Float(DataObject):
         return Float(data)
 
 class String(DataObject):
-    def __init__(self, data, token=None, trace=None):
-        super().__init__(type='String', data=self.trynew(data, str, 'String'), token=token, trace=trace)
+    def __init__(self, data, token=None, trace=None, interpreter=None):
+        super().__init__(type='String', data=self.trynew(data, str, 'String'), token=token, trace=trace, interpreter=interpreter)
         self.len = len(self.data)
         self.objdef['length'] = len(self.data)
+        self.attributes['length'] = self.newmethod(self.length, [], 'length')
+        self.objdef['indexable'] = True
+
+    def op_in(self, other):
+        return Boolean(other.data in self.data)
+
+    def iterate(self):
+        return Iterator(self.data, token=self.token, trace=self.trace, interpreter=self.interpreter)
 
     def istrue(self):
         return len(self.data)
@@ -573,12 +504,15 @@ class String(DataObject):
         return String(data)
 
 class Boolean(DataObject):
-    def __init__(self, booldata, token=None, trace=None):
+    def __init__(self, booldata, token=None, trace=None, interpreter=None):
         if booldata:
             booldata = 1
+            boolean = True
         else:
             booldata = 0
-        super().__init__(type='Boolean', data=booldata, token=token, trace=trace)
+            boolean = False
+        super().__init__(type='Boolean', data=booldata, token=token, trace=trace, interpreter=interpreter)
+        self.objdef['istrue'] = boolean
 
     def op_plus(self):
         self.undefined()
@@ -612,18 +546,23 @@ class Boolean(DataObject):
             return 'true'
         return 'false'
 
-    def istrue(self):
-        return Boolean(self.data == 1)
-
     def __bool__(self):
         return self.data > 0
 
 class Collection(DataObject):
-    def __init__(self, data, token=None, trace=None):
-        super().__init__(type='Collection', data=data, token=token)
+    def __init__(self, data, token=None, trace=None, interpreter=None):
+        super().__init__(type='Collection', data=data, token=token, interpreter=interpreter)
         self.len = len(self.data)
         self.objdef['collection'] = data
         self.objdef['length'] = len(data)
+        self.attributes['length'] = self.newmethod(self.length, [], 'length')
+        self.objdef['indexable'] = True
+
+    def op_in(self, other):
+        return Boolean(other.data in self.data)
+
+    def iterate(self):
+        return Iterator(self.data, token=self.token, trace=self.trace, interpreter=self.interpreter)
 
     def getitem(self, ref):
         if isinstance(ref, Integer):
@@ -642,23 +581,49 @@ class Collection(DataObject):
     def length(self):
         return Integer(self.len)
 
-    def representation(self):
+    def printable(self):
         pt = '['
         for n,i in enumerate(self.data):
             pt += i.toprint()
             if n!=len(self.data)-1: pt += ', '
         return self.newprintable(pt + ']')
 
-class Block(IvyObject):
+class Iterator(IvyObject):
+    def __init__(self, iterable, itertype, token=None, trace=None, interpreter=None):
+        super().__init__(name='<Iterator>', type='Iterator', token=token, trace=trace, interpreter=interpreter)
+        self.iterable = iterable
+        self.itertype = itertype
+        self.length = len(iterable)
+        self.counter = 0
+        self.current = None
+        self.attributes.update({
+            'next': self.newmethod(self.next, [], 'next'),
+            'all': self.newmethod(self.getall, [], 'all'),
+        })
+        self.objdef['indexable'] = True
+
+    def next(self):
+        if self.counter == self.length:
+            self.error(type='Iteration', etype=IvyIterationError, mes='End of iteration')
+        self.current = self.iterable[self.counter]
+        self.counter += 1
+        return self.newobj(self.current)
+
+    def getall(self):
+        return self.newobj(self.iterable)
+
+    def representation(self):
+        return self.newprintable("<Iterator of '%s' at 0x%08x>" % (self.type, id(self)))
+
+class Block:
     def __init__(self, block):
         self.block = block
 
-    def representation(self):
-        return self.newprintable("<Object.Block ")
-
 class Function(IvyObject):
-    def __init__(self, params, code, name='<Function>', token=None, trace=None):
-        super().__init__(type='Function', token=token, trace=trace)
+    def __init__(self, params, code, name='<Function>', token=None, trace=None, interpreter=None):
+        super().__init__(type='Function', token=token, trace=trace, interpreter=interpreter)
+        self.interpreter = interpreter
+        self.anonymous = True
         self.reference = name
         self.type = 'Function'
         self.name = name
@@ -669,8 +634,9 @@ class Function(IvyObject):
         self.objdef['name'] = self.name
         self.objdef['params'] = self.params
         self.objdef['block'] = self.block
+        self.objdef['callable'] = True
 
-    def process_param(param):
+    def process_param(self, param):
         if isinstance(param, String):
             return '"' + str(param.data) + '"'
         elif isinstance(param, Boolean):
@@ -682,114 +648,285 @@ class Function(IvyObject):
             self.error(type='Checking Arguments', mes="'{}' takes {} arguments, but {} were given".format(self.name, len(self.params), len(args)),
                        token=paramtoken, etype=IvyCallError)
 
-    def call(self, interpreter, node):
+    def call(self, node):
         args = node.list_expr
-        cur_record = interpreter.callstack.peek()
+        cur_record = self.interpreter.callstack.peek()
         cur_depth = cur_record.depth
-        record = interpreter.callstack.copy(Record(self.name, RecordType.FUNCTION, cur_depth+1))
-        paramtoken = interpreter.visit(args[0]).token if len(args) != 0 else node.variable
+        record = self.interpreter.callstack.copy(Record(self.name, RecordType.FUNCTION, cur_depth+1))
+        paramtoken = self.interpreter.visit(args[0]).token if len(args) != 0 else node.variable
         self.checkargs(args, paramtoken)
         eargs = []
         for n, i in enumerate(self.params):
-            val = interpreter.visit(args[n])
+            val = self.interpreter.visit(args[n])
             if not self.native:
                 record[i.value] = val
             eargs.append(val)
-        interpreter.callstack.push(record)
+        self.interpreter.callstack.push(record)
         if self.native:
-            call = self.do(eargs)
+            call = self.do(eargs, args, self.interpreter, node)
         else:
-            call = interpreter.visit(self.block)
-        interpreter.callstack.pop()
+            call = self.interpreter.visit(self.block)
+        self.interpreter.callstack.pop()
         if not isinstance(call, IvyObject):
             obj = self.newobj('null', node.variable)
-            # print("newobj")
-            # print(obj.istrue)
             return obj
+        print("what function returns")
+        print(call)
         return call
 
-class Method(Function):
-    def __init__(self, boundclass, params, code, name, token=None, trace=None):
+    def representation(self):
+        if self.anonymous:
+            return self.newprintable("<Anonymous Function at 0x%08x>" % (id(self)))
+        else:
+            return self.newprintable("<Function (reference: %s) at 0x%08x>" % (self.reference, id(self)))
+
+class Method(IvyObject):
+    def __init__(self, boundclass=None, params=[], code=None, name='<Method>', token=None, trace=None, interpreter=None):
+        self.interpreter = interpreter
         self.bound = boundclass
+        self.token = token
+        self.trace = trace
+        self.classname = self.__class__.__name__
+        self.anonymous = False
+        self.reference = name
         self.type = 'Method'
         self.name = name
         self.params = params
         self.block = code
-        self.token = token
-        self.trace = trace
+        self.native = False
+        self.objdef = AttributeObject({
+            'name': self.name,
+            'type': self.type,
+            'self': self.getinstance(),
+            'class': self.getclass,
+            'classname': self.classname,
+        }, 'inspect', self.token, self.trace, self.interpreter)
+        self.attributes = {
+            'inspect': self.objdef
+        }
+        self.objdef['reference'] = self.reference
+        self.objdef['params'] = self.params
+        self.objdef['block'] = self.block
+        self.objdef['bound'] = self.bound
+        self.objdef['callable'] = True
+
+    def process_param(self, param):
+        if isinstance(param, String):
+            return '"' + str(param.data) + '"'
+        elif isinstance(param, Boolean):
+            return str(param.__bool__())
+        return str(param.data)
+
+    def checkargs(self, args, paramtoken):
+        if len(self.params) != len(args):
+            self.error(type='Checking Arguments', mes="'{}' takes {} arguments, but {} were given".format(self.name, len(self.params), len(args)),
+                       token=paramtoken, etype=IvyCallError)
+
+    def call(self, node):
+        args = node.list_expr
+        cur_record = self.interpreter.callstack.peek()
+        cur_depth = cur_record.depth
+        record = self.interpreter.callstack.copy(Record(self.name, RecordType.FUNCTION, cur_depth+1))
+        paramtoken = self.interpreter.visit(args[0]).token if len(args) != 0 else node.variable
+        self.checkargs(args, paramtoken)
+        eargs = []
+        for n, i in enumerate(self.params):
+            val = self.interpreter.visit(args[n])
+            if not self.native:
+                record[i.value] = val
+            eargs.append(val)
+        self.interpreter.callstack.push(record)
+        if self.native:
+            call = self.do(eargs, args, self.interpreter, node)
+        else:
+            call = self.interpreter.visit(self.block)
+        self.interpreter.callstack.pop()
+        if not isinstance(call, IvyObject):
+            obj = self.newobj('null', node.variable)
+            return obj
+        return call
+
+    def representation(self):
+        return self.newprintable("<Method bound to '%s' (reference: '%s') at 0x%08x>" % (self.bound.__class__.__name__, self.reference, id(self)))
 
 class BuiltinMethod(Method):
-    def __init__(self, boundclass, params=[], name='<BuiltinMethod>', func=None, token=None, trace=None):
-        super().__init__(boundclass=boundclass, params=params, code=None, name='<Method>', token=token, trace=trace)
+    def __init__(self, boundclass=None, func=None, params=[], name='<BuiltinMethod>', token=None, trace=None, interpreter=None):
+        super().__init__(boundclass=boundclass, params=params, code=None, name='<Method>', token=token, trace=trace, interpreter=interpreter)
         self.type='BuiltinMethod'
         self.name = name
         self.func = func
         self.native = True
 
-    def do(self, args):
+    def do(self, args, params, interpreter, node):
         func = self.func
-        params = ','.join([process_param(i) for i in args]) if args != [] else ''
+        params = ','.join([self.process_param(i) for i in args]) if args != [] else ''
         return eval('func(%s)' % (params))
 
 class BuiltinFunction(Function):
-    def __init__(self, trace):
-        super().__init__(params=None, code=None, name='<BuiltinFunction>', token=None, trace=trace)
+    def __init__(self, trace, interpreter=None):
+        super().__init__(params=None, code=None, name='<BuiltinFunction>', token=None, trace=trace, interpreter=interpreter)
         self.type = 'BuiltinFunction'
         self.native = True
 
-class FunctionType(BuiltinFunction):
-    def __init__(self, trace):
-        super().__init__(trace)
-        self.name = 'type'
-        self.params = ['object']
 
-    def do(self, args):
-        return args[0].objdef['type']
-
-class FunctionClock(BuiltinFunction):
-    def __init__(self, trace):
-        super().__init__(trace)
-        self.name = 'clock'
-        self.params = []
-
-    def do(self, args):
-        time = datetime.now()
-        return self.newobj(str(time.strftime("%H:%M:%S:%f")))
-
-class FunctionIstrue(BuiltinFunction):
-    def __init__(self, trace):
-        super().__init__(trace)
-        self.name = 'istrue'
-        self.params = ['object']
-
-    def do(self, args):
-        return args[0].istrue()
-
-class FunctionRepr(BuiltinFunction):
-    def __init__(self, trace):
-        super().__init__(trace)
-        self.name = 'repr'
-        self.params = ['object']
-
-    def do(self, args):
-        return args[0].representation()
-
+""" LIBRARY FUNCTIONS """
 class FunctionPrint(BuiltinFunction):
-    def __init__(self, trace):
-        super().__init__(trace)
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
         self.name = 'print'
         self.params = ['object']
 
-    def do(self, args):
+    def do(self, args, params, interpreter, node):
         print(args[0].printable().toprint())
 
+class FunctionType(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'type'
+        self.params = ['object']
+
+    def do(self, args, params, interpreter, node):
+        return args[0].objdef['type']
+
+class FunctionClock(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'clock'
+        self.params = []
+
+    def do(self, args, params, interpreter, node):
+        time = datetime.now()
+        return self.newobj(str(time.strftime("%H:%M:%S:%f")))
+
+""" ATTRIBUTE FUNCTIONS """
+class FunctionIstrue(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'istrue'
+        self.params = ['object']
+
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('istrue'):
+            func = args[0].attrget('istrue')
+            return self.interpreter.call(func, self.token, [])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'istrue'" % (args[0].type), token=args[0].token)
+
+class FunctionIstype(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'istype'
+        self.params = ['object', 'type']
+
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('istype'):
+            func = args[0].attrget('istype')
+            return self.interpreter.call(func, self.token, params[1:])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'istype'" % (args[0].type), token=args[0].token)
+
+class FunctionRepr(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'repr'
+        self.params = ['object']
+
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('repr'):
+            func = args[0].attrget('repr')
+            return self.interpreter.call(func, self.token, [])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'repr'" % (args[0].type), token=args[0].token)
+
 class FunctionLength(BuiltinFunction):
-    def __init__(self, trace):
-        super().__init__(trace)
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
         self.name = 'length'
         self.params = ['object']
 
-    def do(self, args):
-        if hasattr(args[0], 'length'):
-            return args[0].length()
-        self.error('Accessing Length', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'length'" % (args[0].type), token=args[0].token)
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('length'):
+            func = args[0].attrget('length')
+            return self.interpreter.call(func, self.token, [])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'length'" % (args[0].type), token=args[0].token)
+
+class FunctionCallable(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'callable'
+        self.params = ['object']
+
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('callable'):
+            func = args[0].attrget('callable')
+            return self.interpreter.call(func, self.token, [])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'callable'" % (args[0].type), token=args[0].token)
+
+class FunctionIndexable(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'indexable'
+        self.params = ['object']
+
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('indexable'):
+            func = args[0].attrget('indexable')
+            return self.interpreter.call(func, self.token, [])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'indexable'" % (args[0].type), token=args[0].token)
+
+class FunctionAttrget(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'attrget'
+        self.params = ['object', 'attr']
+
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('attrget'):
+            func = args[0].attrget('attrget')
+            return self.interpreter.call(func, self.token, params[1:])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'attrget'" % (args[0].type), token=args[0].token)
+
+class FunctionAttrhas(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'attrhas'
+        self.params = ['object', 'attr']
+
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('attrhas'):
+            func = args[0].attrget('attrhas')
+            return self.interpreter.call(func, self.token, params[1:])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'attrhas'" % (args[0].type), token=args[0].token)
+
+class FunctionAttrset(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'attrset'
+        self.params = ['object', 'attr', 'value']
+
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('attrset'):
+            func = args[0].attrget('attrset')
+            return self.interpreter.call(func, self.token, params[1:])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'attrset'" % (args[0].type), token=args[0].token)
+
+class FunctionPrintable(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'printable'
+        self.params = ['object']
+
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('printable'):
+            func = args[0].attrget('printable')
+            return self.interpreter.call(func, self.token, [])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'printable'" % (args[0].type), token=args[0].token)
+
+class FunctionAttrdel(BuiltinFunction):
+    def __init__(self, trace, interpreter=None):
+        super().__init__(trace, interpreter=interpreter)
+        self.name = 'attrdel'
+        self.params = ['object', 'attr']
+
+    def do(self, args, params, interpreter, node):
+        if args[0].attrhas('attrdel'):
+            func = args[0].attrget('attrdel')
+            return self.interpreter.call(func, self.token, params[1:])
+        self.error('Accessing attribute', etype=IvyAttributeError, mes="Object of type '%s' does not have attribute 'attrdel'" % (args[0].type), token=args[0].token)

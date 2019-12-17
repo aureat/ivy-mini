@@ -47,7 +47,6 @@ class TokenType(Enum):
     GLOBAL = 'global'
     # OBJECT CONSTRUCTION
     NEW_CONSTRUCTOR = 'new'
-    FUNC = 'func'
     FUNCTION = 'function'
     STRUCT = 'struct'
     # DATA TYPE Literals
@@ -57,7 +56,6 @@ class TokenType(Enum):
     # CONDITIONALS
     IF = 'if'
     ELSE = 'else'
-    ELIF = 'elif'
     RETURN = 'return'
     AND = 'and'
     OR = 'or'

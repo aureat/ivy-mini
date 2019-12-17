@@ -1,22 +1,6 @@
 """
 *** PARSER NODES
 """
-class VariableType:
-    def __init__(self, token, gtype):
-        self.typetoken = token
-        self.type = gtype
-
-class VariableDeclaration:
-    def __init__(self, type, id):
-        self.type = type
-        self.id = id
-
-class VariableAssignment:
-    def __init__(self, type, id, expr):
-        self.type = type
-        self.id = id
-        self.value = expr
-
 class Assignment:
     def __init__(self, id, expr):
         self.id = id
@@ -33,16 +17,16 @@ class AttributeCall:
         self.variable = vartoken
         self.attribute = attrtoken
 
-class MethodCall:
-    def __init__(self, vartoken, attrtoken, params):
-        self.variable = vartoken
-        self.method = attrtoken
-        self.params = params
-
 class IndexCall:
     def __init__(self, var, index):
         self.variable = var
         self.index = index
+
+class IndexSet:
+    def __init__(self, var, index, value):
+        self.variable = var
+        self.index = index
+        self.value = value
 
 class FunctionCall:
     def __init__(self, vartoken, lexpr):
@@ -74,6 +58,10 @@ class Program:
     def __init__(self, program):
         self.block = program
 
+class Return:
+    def __init__(self, expr):
+        self.to_return = expr
+
 class PackageDeclaration:
     def __init__(self, id):
         self.id = id
@@ -97,18 +85,6 @@ class Conditional:
         self.ifblock = ifb
         self.elseblock = elseb
 
-class BreakLoop:
-    def __init__(self, token):
-        self.token = token
-
-class ContinueLoop:
-    def __init__(self, token):
-        self.token = token
-
-class Return:
-    def __init__(self, expr):
-        self.to_return = expr
-
 class AttributeAccess:
     def __init__(self, id, att):
         self.variable = id
@@ -119,3 +95,23 @@ class AttributeSet:
         self.variable = id
         self.attribute = att
         self.value = expr
+
+class WhileLoop:
+    def __init__(self, token, condition, block):
+        self.token = token
+        self.condition = condition
+        self.block = block
+
+class ForLoop:
+    def __init__(self, token, iterable, block):
+        self.token = token
+        self.iterable = iterable
+        self.block = block
+
+class BreakLoop:
+    def __init__(self, token):
+        self.token = token
+
+class ContinueLoop:
+    def __init__(self, token):
+        self.token = token

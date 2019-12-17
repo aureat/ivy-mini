@@ -1,5 +1,5 @@
 # Ivy-lang
-A programming language written in python.
+A programming language written in python. Ivy Language was developed as a research project to understand how dynamic and modifiable can you make a programming language. An ivy program nd modify attributes
 
 # Features
 * Dynamically Typed
@@ -20,53 +20,88 @@ A programming language written in python.
 e.g. `python ivy.py -f tests/conditional.ivy`
 * To tokenize an ivy file run `python ivy.py -t [filepath]` (note that you can either put the whole path or search for files within the current directory)
 
-# Example Programs
-```
-nums = [1, 2 , 3, 4];
-
-for (num : nums) {
-    print num;
-}
-```
-
-```
-factorial = function(n) {
-    if (n > 1) {
-        return n * factorial(n-1);
-    }
-    return n;
-};
-print factorial(6);
-```
-
-```
-struct WelcomeMessenger {
-
-    func constructor(name) {
-        if name != None {
-            self.name = name;
-        } else {
-            self.name = "World";
-        }
-        self.length = name.length;
-    }
-
-    func say_hello() {
-        return "Hello, " + self.name;
-    }
-
-}
-
-messenger = new WelcomeMessenger("Altun");
-print messenger.say_hello();
-```
-
 # Technical Specifications
 ## Features
 * Builtin-type objects: Null, Integer, Float, String, Boolean, Collection, Function
 * All literals are resolved into a builtin-type object
 * Statements are not evaluated to a value unless they are expressions
 * Expressions are evaluated to a type object (which means they are evaluated to a value)
+
+## Objects
+### Ivy Objects Overview
+* ATTRIBUTES: Object attributes of an ivy object including methods and names like `object.istrue()` or `object.attrget()`
+* INPSPECT: Object Definition of an ivy object, e.g. name, type, class etc. `object.inspect.name`
+
+### Names in INSPECT
+* name
+* reference
+* type
+* class
+* classname
+* instance
+* isnull
+* istrue
+* callable
+* indexable
+* length
+* params
+* block
+* bound
+* native
+
+### Ivy Object Methods and Attributes
+#### Object Description
+* inspect
+* istrue
+* isnull
+* callable
+* indexable
+* gettype
+* istype
+
+#### Object Attribute Methods
+* attrhas
+* attrget
+* attrset
+* attrdel
+
+#### Representation & Printing
+* repr
+* printable
+
+#### Collectible Methods
+* getitem
+* setitem
+* delitem
+* length
+
+#### Iteration Methods
+* iterate
+* next
+
+#### Error Methods
+* error
+* undefined
+
+#### Binary Operation Methods
+* opadd
+* opsub
+* opmult
+* opdiv
+* opmod
+* oppow
+* oplt
+* oplte
+* opgt
+* opgte
+* opeq
+* opeqnot
+* opnot
+* opin
+* opideq
+* opideqnot
+* opminus
+* opplus
 
 ## Grammar
 ```
@@ -129,14 +164,15 @@ string := " [.*] " | ' [.*] '
 
 ## TO-DO
 - [ ] Complete object model
+- [ ] Methods of Methods (issue: recursion)
+- [ ] Function Declaration
+- [ ] Iterables
+- [ ] Looping and Control Flow
 - [ ] Finish binary operations
 - [ ] Callstack needs a fix: fibonacci function not working
 - [ ] Build semantic analyzer and symbol tables
-- [ ] Define binary operations on other objects
 - [ ] If-Else Conditionals PERMENANT PATCH
-- [ ] If-Elif conditionals without else blocks
 - [ ] Parameters implementation and call stack creation for blocks
-- [ ] Parameters for methods for objects
 - [ ] System framework (system module name)
 - [ ] Local and global environment references
 - [ ] Define types in memory, referencing python-implemented objects
