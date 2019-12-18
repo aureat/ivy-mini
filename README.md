@@ -163,6 +163,8 @@ string := " [.*] " | ' [.*] '
 ```
 
 ## TO-DO
+- [ ] Print statements call functions for the second time
+- [ ] Better block and statement management
 - [ ] Complete object model
 - [ ] Methods of Methods (issue: recursion)
 - [ ] Function Declaration

@@ -1,0 +1,28 @@
+num = 43;
+print(type(num.istrue));
+num.istrue = function() {
+    return "hello";
+};
+print(type(num.istrue));
+print(istype(num, "af"));
+print(num.istype("nah"));
+print(repr(istype(num, 'hey')));
+print(istype(num, [1,2,3]));
+print("changing istype");
+num.istype = function(str) {
+    if(str == num.inspect.type) {
+        print("true");
+        return true;
+    } else {
+        print("false");
+        return false;
+    }
+};
+num.istype = function(str) {
+    return num.inspect.type;
+};
+print(num.istype.inspect.type);
+print(istype(num, 'hey'));
+print(repr(num));
+print(repr(num.istype));
+print(repr(istype(num, 'hey')));

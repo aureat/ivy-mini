@@ -1,0 +1,8 @@
+counter = 0;
+while(true) {
+    if(counter == 10) {
+        break;
+    }
+    print(counter);
+    counter = counter + 1;
+}

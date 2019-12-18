@@ -20,33 +20,11 @@ from error import *
 from lexer import Lexer, RESERVED_KEYWORDS
 from tokentype import TokenType
 from ast import *
-
-"""
-*** Trace Stack
-"""
-
-class SystemTrace():
-    def __init__(self):
-        self.trace = []
-
-    def add(self, type, framename=None, filepath=None, file=None, token=None):
-        trace = {'type': type, 'name': framename, 'filepath': filepath, 'file': file, 'token': token}
-        self.trace.append(trace)
-
-    def peek(self):
-        return self.trace[-1]
-
-    def pop(self):
-        self.trace.pop()
-
-    def __repr__(self):
-        return '\n'.join([str(i) for i in self.trace])
+from tracestack import SystemTrace
 
 class SystemConstants(Enum):
     SYSTEM_BUILTINS = ['length', 'type', 'repr', 'name', 'obj', 'objdef']
     BUILTIN_NAMES = ['Integer', 'Float', 'String', 'Boolean', 'Function']
-
-SYSTEM_TRACE = SystemTrace()
 
 """
 *** Internal File Object
@@ -299,7 +277,7 @@ class Parser(object):
             elif self.match(TokenType.CONTINUE):
                 res = ContinueLoop(token)
             else:
-                res = self.expression()
+                res = ExpressionStatement(self.expression())
         semicolon = self.match(TokenType.SEMICOLON)
         if not semicolon:
             self.error(mes='Expected a `;` to finish statement')
@@ -411,51 +389,6 @@ class Parser(object):
                     elseblock = self.eat_block()
             return Conditional(cond, ifblock, elseblock)
 
-    # def eat_conditional(self):
-    #     conds = []
-    #     if_elif = False
-    #     no_else = True
-    #     token = self.ctoken
-    #     cond = None
-    #     if self.match(TokenType.IF):
-    #         if_elif = True
-    #         if not self.match(TokenType.LPAREN):
-    #             self.error(mes='Expected a paranthesis after conditional token')
-    #         expr = self.expression()
-    #         if not self.match(TokenType.RPAREN):
-    #             self.error(mes="Expected a closing paranthesis ')' to finish conditional expression")
-    #         block = self.eat_block()
-    #         conds.append((expr, block))
-    #     while self.match(TokenType.ELIF):
-    #         if not if_elif:
-    #             self.error(token, mes='Unexpected token for conditional')
-    #         if not self.match(TokenType.LPAREN):
-    #             self.error(mes='Expected a paranthesis after conditional token')
-    #         expr = self.expression()
-    #         if not self.match(TokenType.RPAREN):
-    #             self.error(mes="Expected a closing paranthesis ')' to finish conditional expression")
-    #         block = self.eat_block()
-    #         conds.append((expr, block))
-    #     if self.match(TokenType.ELSE):
-    #         if not if_elif:
-    #             self.error(token, mes='Unexpected token for conditional')
-    #         block = self.eat_block()
-    #         conds.append((None, block))
-    #         no_else = False
-    #     if len(conds) == 0:
-    #         return False
-    #     if len(conds) == 1:
-    #         return Conditional(expr, block, None)
-    #     if no_else:
-    #         cond = None
-    #     else:
-    #         cond = conds[-1][1]
-    #     for i in range(len(conds)-2,0,-1):
-    #         cond = Conditional(conds[i][0], conds[i][1], cond)
-    #     print("return conditional node")
-    #     print(cond)
-    #     return cond
-
     def eat_while(self):
         token = self.ctoken
         if self.match(TokenType.WHILE):
@@ -522,7 +455,6 @@ class Interpreter:
         self.trace = trace
 
     """ INTERPRETER METHODS """
-
     def load(self, file, tree):
         self.file = file
         self.tree = tree
@@ -537,21 +469,21 @@ class Interpreter:
 
     def builtins(self):
         record = self.callstack.peek()
-        record['type'] = FunctionType(SYSTEM_TRACE, self)
-        record['clock'] = FunctionClock(SYSTEM_TRACE, self)
-        record['istrue'] = FunctionIstrue(SYSTEM_TRACE, self)
-        record['istype'] = FunctionIstype(SYSTEM_TRACE, self)
-        record['repr'] = FunctionRepr(SYSTEM_TRACE, self)
-        record['printable'] = FunctionPrintable(SYSTEM_TRACE, self)
-        record['print'] = FunctionPrint(SYSTEM_TRACE, self)
-        record['length'] = FunctionLength(SYSTEM_TRACE, self)
-        record['callable'] = FunctionCallable(SYSTEM_TRACE, self)
-        record['indexable'] = FunctionIndexable(SYSTEM_TRACE, self)
-        #record['call'] = FunctionCallFn(SYSTEM_TRACE)
-        record['attrget'] = FunctionAttrget(SYSTEM_TRACE, self)
-        record['attrset'] = FunctionAttrset(SYSTEM_TRACE, self)
-        record['attrhas'] = FunctionAttrhas(SYSTEM_TRACE, self)
-        record['attrdel'] = FunctionAttrdel(SYSTEM_TRACE, self)
+        record['type'] = FunctionType(self.trace, self)
+        record['clock'] = FunctionClock(self.trace, self)
+        record['istrue'] = FunctionIstrue(self.trace, self)
+        record['istype'] = FunctionIstype(self.trace, self)
+        record['repr'] = FunctionRepr(self.trace, self)
+        record['printable'] = FunctionPrintable(self.trace, self)
+        record['print'] = FunctionPrint(self.trace, self)
+        record['length'] = FunctionLength(self.trace, self)
+        record['callable'] = FunctionCallable(self.trace, self)
+        record['indexable'] = FunctionIndexable(self.trace, self)
+        #record['call'] = FunctionCallFn(self.trace)
+        record['attrget'] = FunctionAttrget(self.trace, self)
+        record['attrset'] = FunctionAttrset(self.trace, self)
+        record['attrhas'] = FunctionAttrhas(self.trace, self)
+        record['attrdel'] = FunctionAttrdel(self.trace, self)
 
     """ ERROR HANDLING """
 
@@ -579,6 +511,7 @@ class Interpreter:
         for i in node.block:
             self.visit(i)
         self.callstack.pop()
+        self.trace.clear()
 
     def visit_Block(self, node):
         for i in node.block:
@@ -736,6 +669,9 @@ class Interpreter:
             self.error(mes='Object of type {} cannot be called by index'.format(var.type), etype=IvyIndexError, token=index.token)
         return var.getitem(index)
 
+    def visit_ExpressionStatement(self, node):
+        print(self.visit(node.expr))
+
     def visit_MethodCall(self, node):
 
         def process_param(param):
@@ -774,10 +710,11 @@ class Module: pass
 """
 
 class IOModule(Module):
-    def __init__(self): pass
+    def __init__(self, trace):
+        self.trace = trace
 
     def error(self, mes):
-        raise IvyIOError(mes, SYSTEM_TRACE)
+        raise IvyIOError(mes, self.trace)
 
     def filefrompath(self, path):
         tryfullpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
@@ -791,16 +728,24 @@ class IOModule(Module):
         except IOError:
             self.error('Cannot find file from specified path')
 
+    def newstrfile(self, code):
+        path = '<String>'
+        iowrap = IOWrapper(path, path, read=False)
+        iowrap.wrapper = path
+        iowrap.contents = str(code)
+        return iowrap
+
     def __repr__(self):
         return '<System.IO>'
 
     __str__ = __repr__
 
 class IOWrapper:
-    def __init__(self, name, path):
-        with open(path, 'r') as file:
-            self.wrapper = file
-            self.contents = file.read()
+    def __init__(self, name, path, read=True):
+        if read:
+            with open(path, 'r') as file:
+                self.wrapper = file
+                self.contents = file.read()
         self.name = name
         self.path = path
         self.line_counter = 0
@@ -835,8 +780,6 @@ class IOWrapper:
 
 class System:
     def __init__(self):
-        "IO Module for System"
-        self.io = IOModule()
 
         """ System Memory """
         self.callstack = CallStack()
@@ -846,10 +789,12 @@ class System:
         self.callstack.push(self.system)
 
         """ Initialize System Objects """
-        self.lexer = Lexer(trace=SYSTEM_TRACE)
-        self.interpreter = Interpreter(callstack=self.callstack, trace=SYSTEM_TRACE)
+        self.trace = SystemTrace()
+        self.io = IOModule(self.trace)
+        self.lexer = Lexer(trace=self.trace)
+        self.interpreter = Interpreter(callstack=self.callstack, trace=self.trace)
         self.objmachine = ObjectMachine(self.interpreter)
-        self.parser = Parser(trace=SYSTEM_TRACE, objmachine=self.objmachine)
+        self.parser = Parser(trace=self.trace, objmachine=self.objmachine)
 
     """ LEXER METHODS """
 
@@ -873,15 +818,20 @@ class System:
         except Error as e:
             print(e)
 
-    def repl(self):
-        """ The REPL """
-        sys.stderr.write("Ivy Language REPL.")
-        while True:
-            try:
-                getin = input("ivy> ")
-                self.run_code(str(getin))
-            except Error as e:
-                print(e)
+    """ REPL METHODS """
+
+    def tokenizestring(self, code):
+        file = self.io.newstrfile(code)
+        return file, self.lexer.tokenizefile(file)
+
+    def run_code(self, getin):
+        try:
+            file, tokens = self.tokenizestring(getin)
+            tree = self.parser.parse(file, tokens)
+            res = self.interpreter.interpret(file, tree)
+            self.trace.clear()
+        except Error as e:
+            print(e)
 
 class IvyConsole:
     def __init__(self):
@@ -913,6 +863,17 @@ class IvyConsole:
             return self.repl()
         parser.print_help(sys.stderr)
         sys.exit(1)
+
+    def repl(self):
+        """ The REPL """
+        sys.stderr.write("Ivy Language REPL.\n")
+        while True:
+            try:
+                getin = input("ivy> ")
+                self._system.run_code(str(getin))
+            except Exception as e:
+                if isinstance(e, Error): print(e)
+                else: print("PythonError: " + str(e))
 
 if __name__ == '__main__':
     ivy = IvyConsole()

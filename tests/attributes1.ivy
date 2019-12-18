@@ -1,0 +1,4 @@
+num = 43;
+print(num.attrdel('istrue'));
+print(num.attrhas('istrue'));
+print(num.istrue());

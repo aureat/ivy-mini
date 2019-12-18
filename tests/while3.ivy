@@ -1,0 +1,11 @@
+// Test Return in a while within a function
+function test_return() {
+    counter = 0;
+    while(true) {
+        print(counter);
+        if(counter==5) return 10;
+            else counter = counter + 1;
+    }
+    return true;
+}
+print(test_return());

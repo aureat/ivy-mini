@@ -115,3 +115,7 @@ class BreakLoop:
 class ContinueLoop:
     def __init__(self, token):
         self.token = token
+
+class ExpressionStatement:
+    def __init__(self, expr):
+        self.expr = expr

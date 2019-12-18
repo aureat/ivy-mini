@@ -218,7 +218,7 @@ class AttributeObject(IvyObject):
         self.token = token
         self.trace = trace
         self.attributes = objdef
-        self.interpreter=interpreter
+        self.interpreter = interpreter
 
     def __getitem__(self, att):
         return self.newobj(self.attributes[att])
@@ -239,6 +239,9 @@ class AttributeObject(IvyObject):
 
     def attrdel(self, att, val):
         self.attributes.pop(att)
+
+    def representation(self):
+        return self.newprintable("<Attribute Object '%s' at 0x%08x>" % (self.type, id(self)))
 
 class Null(IvyObject):
     def __init__(self, token=None, trace=None, interpreter=None):
@@ -670,8 +673,6 @@ class Function(IvyObject):
         if not isinstance(call, IvyObject):
             obj = self.newobj('null', node.variable)
             return obj
-        print("what function returns")
-        print(call)
         return call
 
     def representation(self):
