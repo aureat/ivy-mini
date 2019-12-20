@@ -46,7 +46,6 @@ class TokenType(Enum):
     USE = 'use'
     GLOBAL = 'global'
     # OBJECT CONSTRUCTION
-    NEW_CONSTRUCTOR = 'new'
     FUNCTION = 'function'
     STRUCT = 'struct'
     # DATA TYPE Literals
@@ -60,6 +59,8 @@ class TokenType(Enum):
     AND = 'and'
     OR = 'or'
     NOT = 'not'
+    # STATEMENTS
+    REMOVE = 'remove'
     # LOOPING
     WHILE = 'while'
     FOR = 'for'

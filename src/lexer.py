@@ -1,108 +1,230 @@
-import re
+import string
+from src.token import Token
+from src.tokentype import TokenType
+from src.error import IvyLexerError
 
-class TokenType(object):
+"""
+*** KEYWORD GENERATOR
+"""
+def language_keywords():
+    token_types = list(TokenType)
+    ind_start = token_types.index(TokenType.PACKAGE)
+    ind_end = token_types.index(TokenType.CONTINUE)
+    retdict = {token_type.value: token_type for token_type in token_types[ind_start:ind_end+1]}
+    return retdict
 
-    def __init__(self, name, val=None, lst=[]):
-        self.name = name
-        self.val = val
-        lst.append(self)
+"""
+*** LEXER CONSTANTS
+"""
+ASCII_LETTERS = string.ascii_letters
+DIGITS = string.digits
+ALPHA_NUMERIC = ASCII_LETTERS + DIGITS
+RESERVED_KEYWORDS = language_keywords()
+SINGLE_TOKENS = ['+', '/', '%', '(', ')', ';', ':', ',', '[', ']', '{', '}']
 
-    def __str__(self):
-        return str(self.name)
+"""
+*** Positional File
+"""
+class PositionalFile:
+    def __init__(self, file):
+        self.file = file
+        self.contents = file.contents
+        self.pos = 0
+        self.line = 0
+        self.col = 0
 
-    def __repr__(self):
-        return str(self.name)
-
-class Token(object):
-
-    def __init__(self, type, value, start_pos, line, length):
-        self.type = type
-        self.value = value
-        self.start_pos = start_pos
-        self.end_pos = start_pos + len(value)
-        self.line = line
-        self.length = length
-
-    def __str__(self):
-        return 'Token(' + str(self.type) + ', `' + str(self.value) + '`, ' + str(self.start_pos) + ', ' + str(self.line) + ', ' + str(self.length) + ')'
-
-    def __repr__(self):
-        return self.__str__()
-
-tokens = []
-all_tokens = [
-    ('BOOL', 'bool'), ('INTEGER', 'int'), ('FLOAT', 'float'), ('STRING', 'str'), ('COLLECTION', 'col'), ('ARRAY', 'arr'), ('FUNCTION', 'func'), ('CLASS', 'class'),
-    ('TRUE', 'true'), ('FALSE', 'false'),
-    ('PLUS', '+'), ('MINUS', '-'), ('MULT', '*'), ('DIV', '/'), ('MOD', '%'), ('POW', '**'),
-    ('IF', 'if'), ('ELSE', 'else'), ('ELIF', 'elif'),
-    ('EQUALS', '='), ('COMP_EQUALS', '=='),  ('D_QUOTE', '"'),
-    ('OPEN_PAREN', '('), ('CLOSE_PAREN', ')'), ('OPEN_BRACK', '{'), ('CLOSE_BRACK', '}'),
-    ('OPEN_SQ_BRACK', '['), ('CL0SE_SQ_BRACK', ']'), ('COMMA', ','), ('SEMICOLON', ';'), ('DOT', '.'),
-    ('WHILE', 'while'), ('FOR', 'for'), ('RETURN', 'return'), ('BREAK', 'break'), ('CONTINUE', 'continue'),
-    ('COMP_LT', '>'), ('COMP_GT', '<'), ('COMP_LTE', '>='), ('COMP_GTE', '<='),
-    ('INCLUDE', 'include'),
-]
-
-EOF = TokenType('EOF', tokens)
-IDENTIFIER = TokenType('IDENTIFIER')
-NUMBER = TokenType('NUMBER')
-STRING = TokenType('STRING')
-S_QUOTE = TokenType('S_QUOTE', '\'', tokens)
-
+"""
+*** THE LEXER
+"""
 class Lexer(object):
+    def __init__(self, trace, file=None):
+        self.trace = trace
+        self.file = file
+        self.current_char = None
 
-    def __init__(self, trace_col=None, input=None):
-        self.program = input
-        self.tokens = []
-        self.trace_col = trace_col
+    """ Interface Methods """
 
-    def tokenize_program(self, program):
-        seperated = program.split('\n')
-        tagged_lines = enumerate(seperated)
-        full_line = program
-        return self.tokenize_index(program)
+    def tokenizefile(self, file):
+        self.file = PositionalFile(file)
+        self.current_char = self.file.contents[0]
+        return self.tokenize()
 
-    def tokenize_index(self, prog):
-        tokens = self.tokenize_line(prog)
-        index = prog.index
-        offsets = []
-        append = offsets.append
-        running_offset = 0
-        line_count = 0
-        for token in tokens:
-            word_offset = index(token, running_offset)
-            word_len = len(token)
-            running_offset = word_offset + word_len
-            append((token, word_offset, 0,running_offset))
-        return offsets
+    def tokenize(self):
+        tokens = []
+        tok = self.get_token()
+        token = [i for i in tok] if type(tok) == tuple else [tok]
+        while token[0].type!=TokenType.EOF:
+            tokens += token
+            tok = self.get_token()
+            token = [i for i in tok] if type(tok) == tuple else [tok]
+        tokens += token
+        return tokens
 
-    def tokenize_line(self, program):
-        self.program = program
-        tokstr = filter(None, re.split(r'\s* ( (\/\/.*\n*) | (\'.*\') | (\".*\") | [a-zA-Z_][a-zA-Z0-9_]* | [0-9]*\.?[0-9]+ |(==)|(>=)|(<=)|(\*\*)| [(){}\[\];\+\-=/%\.,<:>] ) \s*', program))
-        # self.tokens = []
-        # [self.tokens.append(i) for i in tokstr if i not in self.tokens]
-        self.tokens = ' '.join(tokstr).split()
-        print(self.tokens)
-        return self.tokens
+    """ Raising Lexer Errors """
 
-    def tokenize(self, tokens_in):
-        token_str = {}
-        [token_str.update({i.val: i.name}) for i in tokens]
-        token_list = [Token(token_str[i[0]], i[0], i[1], i[2], i[3]) if i[0] in token_str.keys() else Token(None, i[0], i[1], i[2], i[3]) for i in tokens_in ]
-        return token_list
+    def error(self, mes, tok):
+        file = self.file.file
+        self.trace.add(type='Syntax',file=file, token=tok)
+        err = IvyLexerError(mes, self.trace)
+        raise err
 
-    def lex(self, program):
-        return self.tokenize(self.tokenize_program(program))
+    """ Tokenizer Methods """
 
-    def show(self, program):
-        for i in self.lex(program):
-            print(i)
+    def advance(self):
+        if self.current_char == '\n':
+            self.file.line += 1
+            self.file.col = 0
+        self.file.pos += 1
+        if self.file.pos > len(self.file.contents) - 1:
+            self.current_char = None
+        else:
+            self.current_char = self.file.contents[self.file.pos]
+            self.file.col += 1
 
-def add_tokens():
-    for tok in all_tokens:
-        exec('{name}=TokenType(\'{name}\',\'{val}\',tokens)'.format(name=str(tok[0]),val=str(tok[1])))
+    def peek(self, more=0):
+        peek_pos = self.file.pos + 1 if more==0 else self.file.pos + 2
+        if peek_pos > len(self.file.contents) - 1:
+            return None
+        else:
+            return self.file.contents[peek_pos]
 
-if __name__ == '__main__':
-    add_tokens()
-    lexer = Lexer()
-    lexer.show(" if x > 3 { \n print (3 + ' hey'); \n } func getdef = (int a, int b) \n { return a + b; }")
+    def match(self, char):
+        if self.file.pos <= len(self.file.contents) - 1:
+            if self.current_char == char:
+                self.advance()
+                return True
+        return False
+
+    def skip_whitespace(self):
+        while self.current_char != None and self.current_char.isspace():
+            self.advance()
+
+    def skip_comment(self):
+        while self.current_char != '\n':
+            self.advance()
+
+    def eat_number(self):
+        token = Token(line=self.file.line, col=self.file.col)
+        result = ''
+        zero_mode = False
+        while self.current_char != None and self.current_char.isdigit():
+            if self.current_char == '0':
+                zero_mode = True
+            if zero_mode and self.current_char != '0':
+                self.error('Invalid number format', Token(type=None, value=self.current_char, line=self.file.line, col=self.file.col))
+            result += self.current_char
+            self.advance()
+        if self.current_char == '.' and self.peek().isdigit():
+            result += self.current_char
+            self.advance()
+            while self.current_char != None and self.current_char.isdigit():
+                result += self.current_char
+                self.advance()
+            token.type = TokenType.FLOAT_CONST
+            token.value = float(result)
+        else:
+            token.type = TokenType.INTEGER_CONST
+            token.value = int(result)
+        return token
+
+    def is_idchar(self, char):
+        if char.isalpha() or char.isdigit() or char == '_':
+            return True
+        return False
+
+    def eat_id(self):
+        token = Token(line=self.file.line, col=self.file.col)
+        value = ''
+        if self.current_char.isalpha() or self.current_char == '_':
+            value += self.current_char
+            self.advance()
+        while self.current_char != None and self.is_idchar(self.current_char):
+            value += self.current_char
+            self.advance()
+        token_type = RESERVED_KEYWORDS.get(value)
+        if token_type is None:
+            token.type = TokenType.IDENTIFIER
+            token.value = value
+        else:
+            token.type = token_type
+            token.value = value
+        return token
+
+    def eat_string(self, quote):
+        value = ''
+        while self.current_char != None and self.current_char != quote:
+            value += self.current_char
+            self.advance()
+        return value
+
+    def rtoken(self, tok, val):
+        tok.type = TokenType(val)
+        tok.value = val
+        return tok
+
+    def get_token(self):
+        while self.current_char != None:
+            if self.current_char.isspace():
+                self.skip_whitespace()
+                continue
+            if self.current_char == '/' and self.peek() == '/':
+                self.advance()
+                self.advance()
+                self.skip_comment()
+                continue
+            tok = Token(line=self.file.line, col=self.file.col)
+            for q in ['\'', '"']:
+                if self.match(q):
+                    str_tok = Token(line=self.file.line,col=self.file.col)
+                    string = self.eat_string(q)
+                    str_tok.type = TokenType.STRING_CONST
+                    str_tok.value = string
+                    tok2 = Token(line=self.file.line, col=self.file.col)
+                    if self.match(q):
+                        return self.rtoken(tok, q), str_tok, self.rtoken(tok2, q)
+                    else:
+                        self.error('Expected a `' + q + '` to finish string literal', tok2)
+            if self.current_char.isalpha() or self.current_char == '_':
+                return self.eat_id()
+            elif self.current_char.isdigit():
+                return self.eat_number()
+            if self.match('='):
+                if self.match('='):
+                    if self.match('='):
+                        return self.rtoken(tok, '===')
+                    return self.rtoken(tok, '==')
+                return self.rtoken(tok, '=')
+            if self.match('-'):
+                if self.match('>'):
+                    return self.rtoken(tok, '->')
+                return self.rtoken(tok, '-')
+            if self.match('*'):
+                if self.match('*'):
+                    return self.rtoken(tok, '**')
+                return self.rtoken(tok, '*')
+            if self.match('>'):
+                if self.match('='):
+                    return self.rtoken(tok, '>=')
+                return self.rtoken(tok, '>')
+            if self.match('<'):
+                if self.match('='):
+                    return self.rtoken(tok, '<=')
+                return self.rtoken(tok, '<')
+            if self.match('!'):
+                if self.match('='):
+                    if self.match('='):
+                        return self.rtoken(tok, '!==')
+                    return self.rtoken(tok, '!=')
+                return self.rtoken(tok, '!')
+            if self.match('.'):
+                if self.match('.'):
+                    if self.match('.'):
+                        return self.rtoken(tok, '...')
+                    return self.rtoken(tok, '..')
+                return self.rtoken(tok, '.')
+            for i in SINGLE_TOKENS:
+                if self.match(i):
+                    return self.rtoken(tok, i)
+            if self.current_char != None:
+                self.error('Unexpected token', tok)
+        return Token(type=TokenType.EOF, value=None, line=self.file.line, col=self.file.col)

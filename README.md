@@ -1,9 +1,10 @@
 # Ivy-lang
-A programming language written in python. Ivy Language was developed as a research project to understand how dynamic and modifiable can you make a programming language. An ivy program nd modify attributes
+A programming language with mostly javascript syntax written in python. Ivy Language was developed as a research project to understand how dynamic and modifiable can you make a programming language. An ivy program nd modify attributes
 
 # Features
 * Dynamically Typed
 * Expressions and Statements
+* Error Tracebacks
 * Object Attributes
 * Binary Operations
 * Conditional Control Flow

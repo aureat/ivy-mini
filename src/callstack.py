@@ -6,6 +6,7 @@ from enum import Enum
 
 class RecordType(Enum):
     SYSTEM = 'SYSTEM'
+    GLOBAL = 'GLOBAL'
     PROGRAM   = 'PROGRAM'
     FUNCTION   = 'FUNCTION'
     METHOD   = 'METHOD'
@@ -49,6 +50,9 @@ class Record:
 
     def __getitem__(self, key):
         return self.members.get(key, False)
+
+    def remove(self, key):
+        self.members.pop(key)
 
     def get(self, key):
         return self.members.get(key)

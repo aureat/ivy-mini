@@ -121,3 +121,12 @@ class SemanticAnalyzer:
         var_symbol self.scope.lookup(var_name)
         if var_symbol is None:
             self.error(IvyNameError, 'Variable not found', node.token)
+
+    def visit_VariableDeclaration(self, node):
+        var_type = node.type.type
+        var_name = node.id.value
+        if self.scope.lookup(var_name, current_only=True):
+            print("Such a name already exists")
+        type_symbol = self.scope.lookup(var_type)
+        var_symbol = Symbol(type_symbol, var_name)
+        self.scope.insert(var_symbol)

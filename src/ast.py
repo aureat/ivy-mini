@@ -58,6 +58,10 @@ class Program:
     def __init__(self, program):
         self.block = program
 
+class Block:
+    def __init__(self, block):
+        self.block = block
+
 class Return:
     def __init__(self, expr):
         self.to_return = expr
@@ -115,6 +119,11 @@ class BreakLoop:
 class ContinueLoop:
     def __init__(self, token):
         self.token = token
+
+class RemoveStatement:
+    def __init__(self, token, name):
+        self.token = token
+        self.name = name
 
 class ExpressionStatement:
     def __init__(self, expr):

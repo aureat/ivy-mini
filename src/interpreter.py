@@ -1,434 +1,268 @@
-class ARType(Enum):
-    PROGRAM   = 'PROGRAM'
+"""
+*** Main Interpreter
+"""
 
-class CallStack:
-    def __init__(self):
-        self._records = []
+from src.ast import *
+from src.callstack import *
+from src.builtinfunction import *
+from src.error import *
 
-    def push(self, ar):
-        self._records.append(ar)
+class Interpreter:
+    def __init__(self, callstack, trace):
+        self.callstack = callstack
+        self.trace = trace
+        self.main = Record('<main>', RecordType.GLOBAL, 1)
+        self.callstack.push(self.main)
+        self.init_env()
 
-    def pop(self):
-        return self._records.pop()
+    """ INTERPRETER METHODS """
+    def load(self, file, tree):
+        self.file = file
+        self.tree = tree
+        self.trace.add(type='Interpreting File', file=file)
 
-    def peek(self):
-        return self._records[-1]
+    def interpret(self, file, tree):
+        self.load(file, tree)
+        tree = self.tree
+        if tree is None:
+            return str()
+        return self.visit(tree)
 
-    def __str__(self):
-        s = '\n'.join(repr(ar) for ar in reversed(self._records))
-        s = f'CALL STACK\n{s}\n'
-        return s
+    def add_env(self, name, value):
+        record = self.callstack.peek()
+        record[name] = value
 
-    def __repr__(self):
-        return self.__str__()
+    def init_env(self):
+        record = self.callstack.peek()
+        record['type'] = FunctionType(self.trace, self)
+        record['clock'] = FunctionClock(self.trace, self)
+        record['istrue'] = FunctionIstrue(self.trace, self)
+        record['isnull'] = FunctionIsnull(self.trace, self)
+        record['istype'] = FunctionIstype(self.trace, self)
+        record['repr'] = FunctionRepr(self.trace, self)
+        record['printable'] = FunctionPrintable(self.trace, self)
+        record['print'] = FunctionPrint(self.trace, self)
+        record['length'] = FunctionLength(self.trace, self)
+        record['callable'] = FunctionCallable(self.trace, self)
+        record['indexable'] = FunctionIndexable(self.trace, self)
+        #record['call'] = FunctionCallFn(self.trace)
+        record['attrget'] = FunctionAttrget(self.trace, self)
+        record['attrset'] = FunctionAttrset(self.trace, self)
+        record['attrhas'] = FunctionAttrhas(self.trace, self)
+        record['attrdel'] = FunctionAttrdel(self.trace, self)
+        record['exit'] = FunctionExit(self.trace, self)
 
+    """ ERROR HANDLING """
 
-class ActivationRecord:
-    def __init__(self, name, type, nesting_level):
-        self.name = name
-        self.type = type
-        self.nesting_level = nesting_level
-        self.members = {}
+    def error(self, mes, token=None, etype=IvyRuntimeError):
+        self.trace.add(type='Runtime', token=token, framename=self.callstack.peek().name, file=self.file)
+        raise etype(mes, self.trace)
 
-    def __setitem__(self, key, value):
-        self.members[key] = value
+    """ VISITOR NODES """
 
-    def __getitem__(self, key):
-        return self.members[key]
-
-    def get(self, key):
-        return self.members.get(key)
-
-    def __str__(self):
-        lines = [
-            '{level}: {type} {name}'.format(
-                level=self.nesting_level,
-                type=self.type.value,
-                name=self.name,
-            )
-        ]
-        for name, val in self.members.items():
-            lines.append(f'   {name:<20}: {val}')
-
-        s = '\n'.join(lines)
-        return s
-
-    def __repr__(self):
-        return self.__str__()
-
-
-class Interpreter(object):
-
-    def __init__(self):
-        self.call_stack = CallStack()
-        self.tokens = []
-        self.env = {}
-
-    def replace_var(self, lst, replace, rwith):
-        return map(lambda x: rwith if x.value == str(replace) else x, lst)
-
-    def store_var(self, dict):
-        dict.update({'builtin': False})
-        self.env[dict['name']] = dict
-
-    def get_var(self, name):
-        return self.env[name]
-
-    def reset_var_params(self, name):
-        self.env[name]['params'] = []
-
-    def push_error(self): pass
-
-    def get_token(self):
-        if len(self.tokens) > 0:
-            return tokens[0]
-        return EOF
-
-    def pop_token(self):
-        if len(self.tokens) > 0:
-            first = self.get_token()
-            self.tokens = self.tokens[1:]
-            return first
-        return EOF
-
-    def convert_number(self, num):
-        try:
-            num = int(num)
-        except ValueError:
-            try:
-                num = float(num)
-            except ValueError:
-                print('convert_number error')
-        return num
-
-    def convert_int(self, num):
-        try:
-            num = int(num)
-        except ValueError:
-            print('convert_int error')
-        return num
-
-    def is_letter(self):
-        return self.get_token().value[0] in string.ascii_letters
-
-    def is_digit(self):
-        return self.get_token().value[0] in string.digits
-
-    def is_token(self, type):
-        token_types = {'declaration': [FUNCTION, INTEGER, FLOAT, STRING, ARRAY, BOOL],
-            'function': [FUNCTION],
-            'condition': [IF, ELSE, ELIF],
-            'loop': [FOR, WHILE],
-            'loop_break': [BREAK],
-            'loop_continue': [CONTINUE],
-            'open_block': [OPEN_BRACK],
-            'close_block': [CLOSE_BRACK],
-            'open_sq': [OPEN_SQ_BRACK],
-            'close_sq': [CLOSE_SQ_BRACK],
-            'string_wrap': [D_QUOTE, S_QUOTE],
-            'assignment': [EQUALS],
-            'comparison': [COMP_EQUALS, COMP_LT, COMP_GT, COMP_LTE, COMP_GTE],
-            'term_op': [MINUS, PLUS],
-            'factor_op': [MULT, DIV, MOD, POW],
-            'add_inv': [MINUS],
-            'open_paren': [OPEN_PAREN],
-            'close_paren': [CLOSE_PAREN],
-            'return_op': [RETURN],
-            'attr_op': [DOT],
-            'list_sep': [COMMA],
-            'bool': [TRUE, FALSE],
-            'file_include': [INCLUDE]}
-        return self.get_token().type in token_types[type]
-
-    def remove_comment(self):
-        if(self.get_token().startswith('//')):
-            self.pop_token()
-
-    def eat_number(self):
-        if(self.is_digit()):
-            return self.convert_number(self.pop_token().value)
-        return False
-
-    def eat_identifier(self):
-        if(self.is_letter()):
-            return self.pop_token().value
-        return False
-
-    def eat_string(self):
-        if self.get_token().value.startswith('\'') or self.get_token().value.startswith('"'):
-            return self.pop_token().value[1:-1]
-        return False
-
-    def eat_array(self):
-        if self.is_token('open_sq'):
-            arr_tok = ''
-            while self.get_token().type == CLOSE_SQ_BRACK:
-                arr_tok += str(self.pop_token().value)
-        return False
-
-    def eat_until(self, char):
-        ret = ""
-        while self.get_token().value != char:
-            ret += self.pop_token()
-        return ret
-
-    def eat_block(self):
-        ret = []
-        self.pop_token()
-        while self.get_token().type != CLOSE_BRACK:
-            ret.append(self.pop_token())
-        self.pop_token()
-        return ret
-
-    def eat_run_return(self):
-        self.pop_token()
-        ret = []
-        while not self.is_token('close_block') and len(self.tokens) > 0:
-            ret.append(this.pop_token())
-        interpreter = Interpreter(self.env)
-        return interpreter.run_code(' '.join(ret))
-
-    def factor(self):
-        final_factor = self.eat_number()
-        if final_factor != False:
-            return final_factor
-        final_factor = self.eat_string()
-        if final_factor != False:
-            return final_factor
-        if self.is_token('add_inv'):
-            self.pop_token()
-            return -self.factor()
-        if self.is_token('bool'):
-            return self.pop_token().value
-        if self.is_token('open_paren'):
-            self.pop_token()
-            factor = self.expression()
-            self.pop_token()
-            return factor
-        if self.is_token('open_sq'):
-            self.pop_token()
-            arr_factor = self.expression()
-            self.pop_token()
-            return arr_factor
-        final_factor = self.eat_identifier()
-        if final_factor != False and str(inal_factor) in self.env.keys():
-                var = self.get_var(final_factor)
-                if var['type'] == 'FUNC':
-                    return self.functionCall(var)
-                else:
-                    return var['body']
-        print("Error: no such factor")
-
-    def term(self):
-        final_term = self.factor()
-        while self.is_token('factor_op'):
-            if self.pop_token().type == MULT:
-                final_term *= this.factor()
-            elif self.pop_token().type == DIV:
-                final_term /= self.factor()
-            elif self.pop_token().type == MOD:
-                final_term %= self.factor()
-        return final_term
-
-    def expression(self):
-        final_exp = self.term()
-        while self.is_token('term_op'):
-            if self.pop_token().type == PLUS:
-                final_exp += self.term()
-            elif self.pop_token().type == MINUS:
-                final_exp += self.term()
-        return final_exp
-
-    def comparison(self):
-        first = self.expression()
-        if self.is_token('comparison'):
-            if self.pop_token().type == COMP_EQUALS:
-                return first == self.expression()
-            elif self.pop_token().type == COMP_GT:
-                return first < self.expression()
-            elif self.pop_token().type == COMP_LT:
-                return first > self.expression()
-            elif self.pop_token().type == COMP_GTE:
-                return first <= self.expression()
-            elif self.pop_token().type == COMP_LTE:
-                return first >= self.expression()
-        return first
-
-    def read_params(self):
-        paramtext = self.eat_until(')')
-        params = [tuple(i.split()) for i in paramtext.split(',')]
-        return params
-
-    # def function_call(self, func):
-    #     self.pop_token()
-    #     self.read_params()
-
-
-# Interpreter.prototype.functionCall = function(currentFunction) {
-# 	if (!this.isOpeningParen()) throw new Error("A function call must have arguments wrapped in parentheses!");
-# 	this.get();
-# 	let currentArguments = this.consumeUntil(")", "array");
-# 	if (currentArguments.length) currentArguments = currentArguments.join("").split(",");
-# 	if (!this.isClosingParen()) throw new Error("A function call must have arguments wrapped in parentheses!");
-# 	this.get();
-# 	if (currentFunction.isNative) {
-# 		currentFunction.params.push(this)
-# 		for (let i in currentArguments) {
-# 			let funcName = currentArguments[i].substring(0,currentArguments[i].indexOf('('));
-# 			if (this.getVariable(currentArguments[i])) {
-# 				currentFunction.params.push(this.getVariable(currentArguments[i]));
-# 			}
-# 			else if (this.getVariable(funcName)) {
-# 				let newInterpreter = new Interpreter(this.memory);
-# 				currentFunction.params.push(newInterpreter.input(currentArguments[i]));
-# 			}
-# 			else {
-# 				currentFunction.params.push(currentArguments[i]);
-# 			}
-# 		}
-# 		let returnVal = currentFunction.body(currentFunction.params);
-# 		this.resetParams(currentFunction.name);
-#
-# 		return returnVal;
-# 	}
-# 	let otherInterpreter = new Interpreter(this.memory);
-# 	let bodyToParse = currentFunction.body.slice(0);
-# 	for (let j = 0; j < currentArguments.length; j++) {
-# 		let currentArgument;
-# 		if (this.getVariable(currentArguments[j]) && this.getVariable(currentArguments[j]).type === "fn") {
-# 			currentArgument = currentArguments[j];
-# 		} else {
-# 			currentArgument = otherInterpreter.input(currentArguments[j]) || currentArguments[j];
-# 		}
-# 		let parameterToReplace = currentFunction.params[j].name;
-# 		switch(currentFunction.params[j].type) {
-# 			case "num":
-# 				if (typeof parseFloat(currentArgument) !== "number" || isNaN(parseFloat(currentArgument))) throw new Error("Functions should only be called with parameters of the correct type!");
-# 				break;
-# 			case "str":
-# 				if (currentArgument[0] !== '"') throw new Error("Functions should only be called with parameters of the correct type!");
-# 				break;
-# 			case "bool":
-# 				if (currentArgument !== "true" && currentArgument !== "false") throw new Error("Functions should only be called with parameters of the correct type!");
-# 				break;
-# 			case "fn":
-# 				if (!this.getVariable(currentArgument) || this.getVariable(currentArgument).type !== "fn") throw new Error("Functions should only be called with parameters of the correct type!");
-# 				break;
-# 			case "arr":
-# 				break;
-# 			default:
-# 				throw new Error("Functions should only be called with parameters of the correct type!");
-# 				break;
-# 		}
-# 		bodyToParse = bodyToParse.map(element => {
-# 			if (element === parameterToReplace) {
-# 				return currentArgument;
-# 			} else {
-# 				return element;
-# 			}
-# 		});
-# 	}
-# 	return otherInterpreter.input(bodyToParse.join(" "));
-# };
-
-    def declare_function(self):
-        self.pop_token()
-        params = self.read_params()
-        func_params = {}
-        for i in params:
-            if i[0] in self.token_types['declaration']:
-                func_params.update({'type': i[0], 'name': i[1]})
-        self.pop_token()
-        body = self.eat_block()
-        return params, body
-
-    def declare_variable(self):
-        type_token = self.pop_token()
-        type = str(type_token.type.name)
-        name = self.eat_identifier()
-        self.pop_token()
-        prop = {'type': type, 'name': name, 'params': None, 'body': None}
-        if type == FUNC:
-            function = self.declare_function()
-            prop['params'] = function[0]
-            prop['body'] = function[1]
-        elif type == INT or type == FLOAT:
-            prop['body'] = self.expression()
-        elif type == STRING:
-            prop['body'] = self.expression()
-        elif type == ARRAY:
-            prop['body'] = self.convert_array(self.list_expression())
-        elif type == BOOL:
-            prop['body'] = self.expression()
+    def visit(self, node):
+        if isinstance(node, DataObject) or isinstance(node, Null):
+            method_name = 'visit_DataObject'
         else:
-            self.push_error()
-        self.store_var(prop)
+            method_name = 'visit_' + type(node).__name__
+        # print("** finding node : " + type(node).__name__)
+        visitor = getattr(self, method_name, self.notfound)
+        return visitor(node)
 
-    def list_expression(self):
-        lst = [self.comparison()]
-        while self.is_token('list_sep'):
-            lst.append(self.comparison())
-        return lst
+    def notfound(self, node):
+        self.error(mes="Cannot interpret ivy code", etype=IvyRuntimeError)
 
-    def convert_array(self, expr):
-        return store_array
+    def visit_Program(self, node):
+        self.visit(node.block)
+        self.trace.clear()
 
-    def conditional(self):
-        if self.get_token().type == IF:
-            self.pop_token()
-            condition = self.comparison()
-            while not condition:
-                self.eat_block()
-                if self.is_token('condition'):
-                    if self.get_token().type == ELSE:
-                        self.pop_token()
-                        do = self.do_program()
-                        if self.is_token('return'):
-                            return do
-                        self.pop_token()
-                        break
-                    elif self.get_token().type == ELIF:
-                        self.pop_token()
-                        condition = self.comparison()
-                    else:
-                        break
-                else:
-                    break
-        else:
-            self.eat_block()
+    def visit_Block(self, node, btype='main'):
+        for i in node.block:
+            exc = self.visit(i)
+            if isinstance(exc, Return):
+                return exc
+            if isinstance(exc, BreakLoop):
+                if btype=='loop':
+                    return exc
+                self.error(mes='Break statement should be inside of a loop', token=exc.token)
+            if isinstance(exc, ContinueLoop):
+                if btype=='loop':
+                    return exc
+                self.error(mes='Continue statement should be inside of a loop', token=exc.token)
 
-    def do_loop(self):
-        if self.get_token().type == FOR:
-            self.pop_token()
-            var = self.pop_token()
-            self.pop_token()
-            bound1 = self.convert_int(self.pop_token())
-            self.pop_token()
-            bound2 = self.convert_int(self.pop_token())
-            loop_body = eat_block()
-            child_nodes = []
-            if bound1 <= bound2:
-                for i in range(bound1, bound2):
-                    child_nodes.append(loop_body.replace_var(lst, var, i))
-            else:
-                for i in range(bound2, bound1, -1):
-                    child_nodes.append(loop_body.replace_var(lst, var, i))
-        elif self.get_token().type == WHILE:
-            pass
-        else:
-            print("NOT LOOP TOKEN")
+    def visit_Function(self, node):
+        node.interpreter = self
+        return node
 
-    def do_program(self):
-        while len(self.tokens) > 0:
-            if self.is_token('declaration'):
-                self.declare_variable()
-            elif self.is_token('condition'):
-                ret = self.conditional()
-                if ret:
-                    return ret
-            elif self.is_token('loop'):
-                self.do_loop()
-            elif self.is_token('return'):
-                self.eat_run_return()
-            else:
-                return self.expression()
+    def visit_Conditional(self, node):
+        comp = self.visit(node.condition)
+        if comp.istrue():
+            return self.visit(node.ifblock)
+        elif node.elseblock is not None:
+            return self.visit(node.elseblock)
+
+    def visit_CompoundStatement(self, node):
+        for stmt in node.compound:
+            exec_stmt = self.visit(stmt)
+
+    def visit_BinaryOperator(self, node):
+        left = self.visit(node.left)
+        right = self.visit(node.right)
+        if node.op.type == TokenType.PLUS:
+            return left.getop('add', right)
+        elif node.op.type == TokenType.MINUS:
+            return left.getop('sub', right)
+        elif node.op.type == TokenType.MUL:
+            return left.getop('mult', right)
+        elif node.op.type == TokenType.FLOAT_DIV:
+            return left.getop('div', right)
+        elif node.op.type == TokenType.MOD:
+            return left.getop('mod', right)
+        elif node.op.type == TokenType.POWER:
+            return left.getop('pow', right)
+        elif node.op.type == TokenType.COMP_EQ:
+            return left.getop('eq', right)
+        elif node.op.type == TokenType.COMP_EQ_NOT:
+            return left.getop('eq_not', right)
+        elif node.op.type == TokenType.COMP_GT:
+            return left.getop('gt', right)
+        elif node.op.type == TokenType.COMP_GTE:
+            return left.getop('gte', right)
+        elif node.op.type == TokenType.COMP_LT:
+            return left.getop('lt', right)
+        elif node.op.type == TokenType.COMP_LTE:
+            return left.getop('lte', right)
+        elif node.op.type == TokenType.AND:
+            return left.getop('and', right)
+        elif node.op.type == TokenType.OR:
+            return left.getop('or', right)
+        elif node.op.type == TokenType.COMP_ID:
+            return left.getop('ideq', right)
+        elif node.op.type == TokenType.COMP_ID_NOT:
+            return left.getop('ideq_not', right)
+
+    def visit_DataObject(self, node):
+        return node
+
+    def visit_UnaryOp(self, node):
+        op = node.op.type
+        if op == TokenType.PLUS:
+            return self.visit(node.expr).op_plus()
+        elif op == TokenType.MINUS:
+            return self.visit(node.expr).op_minus()
+        elif op == TokenType.NOT:
+            return self.visit(node.expr).op_not()
+
+    def visit_Assignment(self, node):
+        id = node.id.value
+        record = self.callstack.peek()
+        value = self.visit(node.value)
+        if isinstance(value, Function):
+            value.anonymous = False
+            value.reference = id
+        record[id] = value
+
+    def visit_VariableCall(self, node):
+        var_name = node.callname
+        record = self.callstack.peek()
+        value = record[var_name]
+        if value != False:
+            return value
+        self.error(mes='Name ' + var_name + ' does not exist', token=node.token, etype=IvyNameError)
+
+    def visit_FunctionCall(self, node):
+        func = self.visit(node.variable)
+        value = func.call(node)
+        return value
+
+    def visit_WhileLoop(self, node):
+        comp = self.visit(node.condition)
+        while comp.istrue():
+            loop = None
+            exc = self.visit(node.block, 'loop')
+            if isinstance(exc, BreakLoop): break
+            if isinstance(exc, ContinueLoop): continue
+            if isinstance(exc, Return): return exc
+            comp = self.visit(node.condition)
+
+    def visit_BreakLoop(self, node):
+        return node
+
+    def visit_ContinueLoop(self, node):
+        return node
+
+    def call(self, func, token, params):
+        func.interpreter = self
+        node = FunctionCall(token, params)
+        value = func.call(node)
+        return value
+
+    def visit_ReturnStatement(self, node):
+        if self.callstack.peek().type != RecordType.FUNCTION:
+            self.error(mes='Return statement should be inside of a function', token=node.ret)
+        to_return = self.visit(node.expr) if node.expr != None else Null()
+        return Return(to_return)
+
+    def visit_RemoveStatement(self, node):
+        if node.name == None:
+            self.error(mes='Remove statement should be followed by a name', token=node.token)
+        rec = self.callstack.peek()
+        name = node.name.value
+        if name in rec.members:
+            rec.remove(name)
+        else: self.error(mes='Name ' + name + ' does not exist', token=node.name)
+
+    def visit_AttributeCall(self, node, access=False):
+        var = self.visit(node.variable)
+        if not hasattr(var, 'attrget'):
+            self.error(mes="Object of type '" + var.__class__.__name__ + "' does not have the attribute 'attrget'",
+                       token=node.attribute,
+                       etype=IvyAttributeError)
+        attr = var.attrget(node.attribute.value)
+        if attr:
+            return attr
+        self.error(mes="Object of type '" + var.type + "' does not have the attribute '" + node.attribute.value + "'",
+                   token=node.attribute,
+                   etype=IvyAttributeError)
+
+    def visit_AttributeAccess(self, node):
+        return self.visit_AttributeCall(node)
+
+    def visit_AttributeSet(self, node):
+        att = node.attribute
+        var = self.visit(node.variable.variable)
+        value = self.visit(node.value)
+        if isinstance(value, Function):
+            value.anonymous = False
+            value.reference = att.value
+        if hasattr(var, 'attrset'):
+            var.attrset(att.value, value)
+            return
+        self.error(mes="Object of type '" + var.type + "' does not have the attribute 'attrset'",
+                   token=att,
+                   etype=IvyAttributeError)
+
+    def visit_IndexCall(self, node):
+        var = self.visit(node.variable)
+        index = self.visit(node.index)
+        if not hasattr(var, "getitem"):
+            self.error(mes='Object of type {} cannot be called by index'.format(var.type), etype=IvyIndexError, token=index.token)
+        return var.getitem(index)
+
+    def visit_ExpressionStatement(self, node):
+        print(self.visit(node.expr))
+
+    def visit_MethodCall(self, node):
+
+        def process_param(param):
+            if isinstance(param, String):
+                return '"' + str(param.data) + '"'
+            elif isinstance(param, Boolean):
+                return str(param.__bool__())
+            return str(param.data)
+
+        metval = self.visit(node.variable)
+        met = metval.getmethod(node.method.value)
+        params = ','.join([process_param(i) for i in node.params]) if node.params != [False] else ''
+        if not isinstance(met, Boolean):
+            return eval('met({})'.format(params))
