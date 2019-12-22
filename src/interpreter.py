@@ -14,6 +14,7 @@ class Interpreter:
         self.main = Record('<main>', RecordType.GLOBAL, 1)
         self.callstack.push(self.main)
         self.init_env()
+        self.loop = False
 
     """ INTERPRETER METHODS """
     def load(self, file, tree):
@@ -76,19 +77,15 @@ class Interpreter:
         self.visit(node.block)
         self.trace.clear()
 
-    def visit_Block(self, node, btype='main'):
+    def visit_Block(self, node):
         for i in node.block:
             exc = self.visit(i)
             if isinstance(exc, Return):
-                return exc
+                return exc.to_return
             if isinstance(exc, BreakLoop):
-                if btype=='loop':
-                    return exc
-                self.error(mes='Break statement should be inside of a loop', token=exc.token)
+                return exc
             if isinstance(exc, ContinueLoop):
-                if btype=='loop':
-                    return exc
-                self.error(mes='Continue statement should be inside of a loop', token=exc.token)
+                return exc
 
     def visit_Function(self, node):
         node.interpreter = self
@@ -178,17 +175,22 @@ class Interpreter:
     def visit_WhileLoop(self, node):
         comp = self.visit(node.condition)
         while comp.istrue():
-            loop = None
-            exc = self.visit(node.block, 'loop')
+            self.loop = True
+            exc = self.visit(node.block)
+            self.loop = False
             if isinstance(exc, BreakLoop): break
             if isinstance(exc, ContinueLoop): continue
             if isinstance(exc, Return): return exc
             comp = self.visit(node.condition)
 
     def visit_BreakLoop(self, node):
+        if not self.loop:
+            self.error(mes='Break statement should be inside of a loop', token=node.token)
         return node
 
     def visit_ContinueLoop(self, node):
+        if not self.loop:
+            self.error(mes='Continue statement should be inside of a loop', token=node.token)
         return node
 
     def call(self, func, token, params):

@@ -116,6 +116,7 @@ class IvyObject(object):
         },
             'inspect', self.token, self.trace, self.interpreter)
         self.attributes['inspect'] =  self.objdef
+        self.attributes['access'] = AttributeObject(self.__dict__, 'access', self.token, self.trace, self.interpreter)
 
     """ OBJECT METHODS """
     def newobj(self, obj, token=None):
@@ -153,6 +154,8 @@ class IvyObject(object):
 
     """ OBJECT ATTRIBUTES """
     def attrget(self, att):
+        if att == 'access':
+            return AttributeObject(self.__dict__, 'access', self.token, self.trace, self.interpreter)
         if att in self.attributes:
             return self.newobj(self.attributes[att])
         return Boolean(False)
@@ -643,7 +646,7 @@ class Function(IvyObject):
         self.objdef['params'] = self.realparams
         self.objdef['block'] = self.block
         self.objdef['callable'] = True
-        self.attributes['call'] = self.newmethod(self.call, self.params, 'call')
+        self.attributes['call'] = self.newmethod(self.callmet, self.params, 'call')
 
     def process_param(self, param):
         if isinstance(param, String):
@@ -656,6 +659,16 @@ class Function(IvyObject):
         if len(self.params) != len(args):
             self.error(type='Checking Arguments', mes="'{}' takes {} arguments, but {} were given".format(self.name, len(self.params), len(args)),
                        token=paramtoken, etype=IvyCallError)
+
+    def callmet(self, *args):
+        class Call:
+            def __init__(self): pass
+        node = Call()
+        node.variable = self.token
+        node.list_expr = []
+        for a in args:
+            node.list_expr.append(self.newobj(a))
+        return self.call(node)
 
     def call(self, node):
         args = node.list_expr
@@ -676,9 +689,11 @@ class Function(IvyObject):
         else:
             call = self.interpreter.visit(self.block)
         self.interpreter.callstack.pop()
-        if not isinstance(call, IvyObject):
+        if not call:
             obj = self.newobj('null', node.variable)
             return obj
+        elif not isinstance(call, IvyObject):
+            return self.newobj(call)
         return call
 
     def representation(self):
@@ -741,6 +756,7 @@ class Method(IvyObject):
         cur_depth = cur_record.depth
         record = self.interpreter.callstack.copy(Record(self.name, RecordType.FUNCTION, cur_depth+1))
         paramtoken = self.interpreter.visit(args[0]).token if len(args) != 0 else node.variable
+        print(paramtoken)
         self.checkargs(args, paramtoken)
         eargs = []
         for n, i in enumerate(self.params):
@@ -754,9 +770,11 @@ class Method(IvyObject):
         else:
             call = self.interpreter.visit(self.block)
         self.interpreter.callstack.pop()
-        if not isinstance(call, IvyObject):
+        if not call:
             obj = self.newobj('null', node.variable)
             return obj
+        elif not isinstance(call, IvyObject):
+            return self.newobj(call)
         return call
 
     def representation(self):

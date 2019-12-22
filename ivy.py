@@ -44,9 +44,9 @@ class IvyConsole:
         self._system.repl()
         while True:
             try:
-                getin = input("ivy> ")
+                getin = input(">> ")
                 self._system.run_code(str(getin))
-            except Exception as e:
+            except Error as e:
                 if isinstance(e, Error): print(e)
                 else: print("PythonError: " + str(e))
 

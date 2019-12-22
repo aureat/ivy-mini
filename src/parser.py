@@ -53,7 +53,7 @@ class Parser(object):
 
     def parse(self, file, tokens):
         self.load(file, tokens)
-        res = self.program()
+        res = Program(self.program())
         if self.ctoken.type == TokenType.EOF:
             return res
         self.error(mes='EOF Error')
@@ -154,7 +154,7 @@ class Parser(object):
         elif self.current(TokenType.FUNCTION):
             res = self.function_expression()
         else:
-            self.error()
+            return None
         """
             Handling calls
             ex. variable.attribute[index]().attribute[][][]()().attribute
@@ -216,14 +216,13 @@ class Parser(object):
 
     def expression(self):
         binfactor = self.binfactor()
-        if binfactor != None:
-            ops = [TokenType.AND]
-            while self.ctoken.type in ops:
-                optok = self.ctoken
-                for op in ops:
-                    if self.match(op):
-                        binfactor = BinaryOperator(binfactor, optok, self.binfactor())
-            return binfactor
+        ops = [TokenType.AND]
+        while self.ctoken.type in ops:
+            optok = self.ctoken
+            for op in ops:
+                if self.match(op):
+                    binfactor = BinaryOperator(binfactor, optok, self.binfactor())
+        return binfactor
 
     def function_expression(self):
         token = self.ctoken
@@ -358,7 +357,7 @@ class Parser(object):
             block = self.program(TokenType.RBRACK)
             if not self.match(TokenType.RBRACK):
                 self.error(mes='Expected a closing bracket to finish block')
-            return Block(block)
+            return block
         if single:
             stmt = self.statement()
             return Block([stmt])
@@ -407,7 +406,7 @@ class Parser(object):
         prog = [self.eat_program()]
         while self.ctoken.type != endtok:
             prog.append(self.eat_program())
-        return Program(Block(prog))
+        return Block(prog)
 
     def eat_program(self):
         if self.current(TokenType.IF):

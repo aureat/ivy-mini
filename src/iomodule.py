@@ -2,6 +2,7 @@
 *** FILES AND PACKAGES
 """
 import sys
+import os
 from src.error import IvyIOError
 from src.module import Module
 from src.objects import *

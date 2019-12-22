@@ -5,7 +5,7 @@ class BuiltinFunction(Function):
         super().__init__(params=None, code=None, name='<BuiltinFunction>', token=None, trace=trace, interpreter=interpreter)
         self.type = 'BuiltinFunction'
         self.native = True
-
+        self.attributes['call'] = None
 
 """ LIBRARY FUNCTIONS """
 class FunctionPrint(BuiltinFunction):
