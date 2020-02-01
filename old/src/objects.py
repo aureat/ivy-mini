@@ -321,6 +321,9 @@ class DataObject(IvyObject):
             return Boolean(self.data != other.data)
         return Boolean(self.data != other)
 
+    def op_not(self):
+        return Boolean(not self.istrue())
+
     def toprint(self):
         return str(self.data)
 
@@ -356,7 +359,7 @@ class Integer(DataObject):
         self.undefined(op, self.type, other.type)
 
     def op_not(self):
-        self.undefined()
+        return Boolean(not self.istrue())
 
     def istrue(self):
         return Boolean(True) if abs(self.data) > 0 else Boolean(False)
@@ -391,10 +394,7 @@ class Float(DataObject):
     def op_minus(self):
         return Integer(-self.data)
 
-    def op_not(self):
-        self.undefined()
-
-    def istrue(self, other):
+    def istrue(self):
         return Boolean(True) if abs(self.data) > 0 else Boolean(False)
 
     def dobinop(self, op, other, searchm=False):
@@ -446,9 +446,6 @@ class String(DataObject):
 
     def op_minus(self):
         self.undefined('minus')
-
-    def op_not(self):
-        self.undefined('not')
 
     def istrue(self):
         return Boolean(True) if len(self.data) > 0 else Boolean(False)
@@ -562,10 +559,16 @@ class Collection(DataObject):
     def __init__(self, data, token=None, trace=None, interpreter=None):
         super().__init__(type='Collection', data=data, token=token, interpreter=interpreter)
         self.len = len(self.data)
-        self.objdef['collection'] = data
+        self.objdef['collection'] = self.data
         self.objdef['length'] = len(data)
         self.attributes['length'] = self.newmethod(self.length, [], 'length')
         self.objdef['indexable'] = True
+        self.attributes['add'] = self.newmethod(self.additem, ['item'], 'add')
+        self.attributes['remove'] = self.newmethod(self.delitem, ['item'], 'remove')
+        self.attributes['max'] = self.newmethod(self.max, [], 'max')
+
+    def max(self):
+        return self.newobj(max(self.data))
 
     def op_in(self, other):
         return Boolean(other.data in self.data)
@@ -575,14 +578,14 @@ class Collection(DataObject):
 
     def getitem(self, ref):
         if isinstance(ref, Integer):
-            return self.objdef['obj_coll'][ref.data]
+            return self.data[ref.data]
         self.error(type='Calling Index',etype=IvyIndexError, mes="Collection index calls must be of type 'Integer'")
 
     def additem(self, val):
-        self.objdef['collection'].append(val)
+        self.data.append(val)
 
     def delitem(self, val):
-        self.objdef['collection'].remove(val)
+        self.data.remove(val)
 
     def istrue(self):
         return Boolean(self.len > 0)

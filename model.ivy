@@ -1,0 +1,347 @@
+// IVY LANGUAGE
+// a scripting language in python
+// language feature model
+// based on javascript
+
+// (1) Scoping
+// two types of scoping:
+//  (a) if, while, for, block,
+//  (b) function, struct,
+
+// Scoping rules with outer
+name = "altun";
+{
+  a = "outer";
+  {
+    outer a;
+    a += " addition";
+    {
+      outer a;
+      a += " and another";
+    }
+  }
+  a;
+}
+
+// basic scoping rules
+{
+  a = "outer";
+  {
+    println(a); // "outer"
+    a = "inner";
+    println(a); // "inner"
+    b = "inside scope";
+  }
+  {
+    a = "does " + a + " work here?"; // nameerror: referenced before assignment
+  }
+  // next nested scope within parent
+  {
+    outer a;
+    a = a + " works inside of nested scope";
+    println(a); // "outer works inside of nested scope"
+  }
+  println(b); // "inside scope"
+}
+
+// anonymous function scoping?
+func1 = function() {
+  {
+    const1 = ...;
+    func2 = function() {
+      outer const1;
+    };
+  }
+  {
+    const2 = ...;
+    func3 = function() {
+
+    };
+  }
+};
+
+// Multiple Assignment
+a = b = c = 2;
+
+// System Module Default
+System.list();
+// >>> System.list();
+// [
+//   version, globals, builtins, IO,
+//   Stack, locals
+// ];
+
+System.version; // Ivy Language Version 2.0
+// System names
+System.globals(); // [System, IO, ...] returns a collection of all names in the environment
+// System builtins
+System.builtins = [
+      System, IO, IOWrapper, Object,      // main system objects
+      Integer, Float, String, Boolean,    // type objects
+      Collection,                         // collectible object
+      print, println, repr, str,        // printable functions
+      typeof, structof, nameof, istype,   // object info functions
+      istrue, isnull, callable, indexable,                             // type property functions
+];
+
+// System Module -> Call Stack
+System.Stack.pop();
+System.Stack.peek();
+
+// in the global area: locals == globals
+assert System.locals() == System.globals();
+
+// >>> System.globals()
+globals() // returns collection of globally defined names
+
+
+// IO Class
+// file io wrappers
+System.IO.IOWrapper; // <IOWrapper structure>
+// methods: writeline, write, readline, close, open
+
+System.IO.stdin.readline();
+/// reads a line from stdin file
+/// >>> System.IO.stdin.readline();
+/// _
+/// >>>
+
+// Object Methods
+typeof(43); // "Integer" : String
+structof(43); // <Integer structure> : Structure
+nameof(43); // "<Integer>"
+nameof("string"); // "<String>"
+nameof(function(){
+    return 23;
+  }); // "<Function>"
+nameof(istype); // "istype"
+typeof(istype); // "Function"
+
+// Creating new objects from types
+new Integer("34"); // 34
+new Float("313.2"); // 313.2
+new String(43); // '43'
+new String(true); // 'true'
+new String(false); // 'false'
+new String(null); // ''
+new Boolean(1); // true
+new Boolean(0); // false
+new Boolan("true"); // true
+new Boolan("false"); // false
+new Collection(1,2,3,4); // [1,2,3,4]
+new Collection(1); // [1]
+new Collection(); // []
+
+// Base 'Object' Class
+// Inherit from the Object class
+// attributes:
+Object.list();
+// >>> Object.list();
+[
+    list,
+    repr, str,                                        // string & representation methods
+    istrue, isnull, callable, indexable,              // object properties
+    getattr, setattr, hasattr, delattr,               // Attribute Management
+    getitem, setitem, length, iterate,                // objective methods
+    op_add, op_sub, op_mult, op_div, op_mod, op_pow
+    op_eq, op_eq_not, op_gt, op_gte, op_lt, op_lte,
+    op_or, op_and, op_in,
+    op_ideq, op_ideq_not,
+    op_not, op_minus,
+];
+// NOTE: 'in' operator
+// if(name in names) uses names.op_in() to do binary operation 'in'
+// for(name in names) uses names.iterate() to create an iterator
+
+// Reflective Attributes
+// Basic Types
+Integer.name;
+Integer.type;
+Integer.struct;
+// methods
+Integer.callable;
+Integer.indexable;
+Integer.isnull;
+Integer.istrue;
+
+// More Inspection w/ count
+"hello".count;
+[1, 2, 3].count;
+
+// count used for the length method
+// and the length function uses the length method of an object, NOT count attribute
+length("hello");
+
+// >>> length("hello");
+// 5
+// calls "hello".length(), which in turn returns "hello".count
+// same as for collections
+
+// Basic Attribute Demo
+if(true) {
+  num = 43;
+  print(type(num.istrue));
+  num.istrue = () => { "hello" };
+  print(istrue(num));
+  print(type(num.istrue));
+  print(istype(num, "af"));
+  print(num.istype("nah"));
+  print(repr(istype(num, 'hey')));
+  print(istype(num, [1,2,3]));
+  print(num.istype.inspect.type);
+  print(istype(num, 'hey'));
+  print(repr(num));
+  print(repr(num.istype));
+  print(repr(istype(num, 'hey')));
+}
+
+// Functions
+(n) => {n**2};
+function(n) { return n**2; };
+function name(n) { return 12; }
+
+// Loops
+for (i in [1..5]) { ... }
+for (i in [1..5]) { ... }
+for (i in new Range(1,5,2)) { ... }
+for (i in "hello") { ... }
+for (i in [1, 2, 3]) { ... }
+while (true) { ... }
+
+// deleting names
+name = 12;
+delete 12;
+
+// Recursive Functions
+// Fibonacci
+fibonacci = function(n) {
+    if(n <= 1) return 1;
+    return fibonacci(n-1) + fibonacci(n-2);
+};
+print(fibonacci(10));
+// Factorial
+factorial = function(n) {
+    if(n > 1) return n * factorial(n-1);
+    return n;
+};
+print(factorial(6));
+
+// Objects and Prototyping
+function Prototype() {  }
+object = new Prototype();
+
+// Object Extensions
+struct Object (from Object) {
+    static name = "altun";
+}
+
+println(Object.name); // "altun"
+
+// Example of struct and inheritance
+// Demonstrating struct and construct
+// Dictionary Object
+struct Dictionary (from Object) {
+
+    attrmap = new Object();
+
+    function construct() {
+        this.name = "<Dictionary>";
+        this.type = "Dictionary";
+    }
+
+    function setattr(key, value) {
+        attrmap.setattr(key, value);
+    }
+
+    function getattr(key) {
+        return attrmap.getattr(key)
+    }
+
+    function length() {
+        return length(this.attrmap);
+    }
+
+    function keys() {
+        return attrmap.list();
+    }
+
+    function remove(key) {
+        return attrmap.delattr(key);
+    }
+
+}
+
+dict = new Dictionary();
+dict.num1 = 23;
+dict.num2 = 34;
+dict.bool = true;
+// >>> dict.num2;
+// 34
+// >> dict.bool;
+// true
+
+// Syntax and Grammar Definition
+if (true) if (true) if (true) name = "altun";
+if (true) name = "altun";
+    else if (true) name = "haiti"; else name = "david";
+if (false) num = 12; else num = 43;
+while (true) print(num);
+if (true) while (true) print(num);
+
+
+// Standard Library
+// type, typeof, structof, istype, print, readline
+function typeof(obj) {
+  return Object.typeof(obj);
+}
+function nameof(obj) {
+  return Object.nameof(obj);
+}
+function structof(obj) {
+  return Object.structof(obj);
+}
+function istype(obj, str) {
+  if (str == obj.inspect.type)
+      return true;
+  else return false;
+}
+function print(obj) {
+  System.IO.stdout.write(obj.tostring());
+}
+function println(obj) {
+  System.IO.stdout.writeline(obj.tostring());
+}
+function readline(pretext) {
+  System.IO.stdout.print(pretext);
+  return System.IO.stdin.readline().substring(-2);
+}
+function locals() {
+    return System.locals();
+}
+function globals() {
+    return System.globals();
+}
+IO = System.IO;
+IOWrapper = System.IO.IOWrapper;
+
+//
+// EXPERIMENTAL
+// CODE
+//
+// Structure Extension
+
+OldFunction = Function;
+
+struct Function (from Function) {
+
+    function call() {
+        println("executing function " + self.name);
+        super.call();
+    }
+
+}
+
+testfunc = function() { return 13; };
+// >>> testfunc();
+// executing function testfunc
+// 13

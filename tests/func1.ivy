@@ -1,3 +1,0 @@
-func getname(object) {
-    return object.inspect.type;
-}

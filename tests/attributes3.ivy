@@ -1,4 +1,0 @@
-print(type(x));
-print(callable(num.istype));
-print("End of program");
-print(clock());

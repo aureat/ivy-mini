@@ -34,7 +34,7 @@ class FunctionClock(BuiltinFunction):
 
     def do(self, args, params, interpreter, node):
         time = datetime.now()
-        return self.newobj(str(time.strftime("%H:%M:%S:%f")))
+        return self.newobj(str(time.strftime("%H:%M:%S:%f")[:8]))
 
 """ ATTRIBUTE FUNCTIONS """
 class FunctionIstrue(BuiltinFunction):

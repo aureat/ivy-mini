@@ -1,0 +1,7 @@
+function nameof(obj) {
+    return obj.name;
+}
+
+function typeof(obj) {
+    return obj.type;
+}

@@ -1,3 +1,8 @@
+"""
+***  IVY Language Interpreter
+***  Lexical Analyzer
+"""
+
 import string
 from src.token import Token
 from src.tokentype import TokenType
@@ -8,7 +13,7 @@ from src.error import IvyLexerError
 """
 def language_keywords():
     token_types = list(TokenType)
-    ind_start = token_types.index(TokenType.PACKAGE)
+    ind_start = token_types.index(TokenType.OUTER)
     ind_end = token_types.index(TokenType.CONTINUE)
     retdict = {token_type.value: token_type for token_type in token_types[ind_start:ind_end+1]}
     return retdict
@@ -21,6 +26,7 @@ DIGITS = string.digits
 ALPHA_NUMERIC = ASCII_LETTERS + DIGITS
 RESERVED_KEYWORDS = language_keywords()
 SINGLE_TOKENS = ['+', '/', '%', '(', ')', ';', ':', ',', '[', ']', '{', '}']
+ASSIGNMENT = ['=', '+=', '*=', '-=', '/=', '%=']
 
 """
 *** Positional File
@@ -222,6 +228,26 @@ class Lexer(object):
                         return self.rtoken(tok, '...')
                     return self.rtoken(tok, '..')
                 return self.rtoken(tok, '.')
+            if self.match('+'):
+                if self.match('='):
+                    return self.rtoken(tok, '+=')
+                return self.rtoken(tok, '+')
+            if self.match('-'):
+                if self.match('='):
+                    return self.rtoken(tok, '-=')
+                return self.rtoken(tok, '-')
+            if self.match('*'):
+                if self.match('='):
+                    return self.rtoken(tok, '*=')
+                return self.rtoken(tok, '*')
+            if self.match('/'):
+                if self.match('='):
+                    return self.rtoken(tok, '/=')
+                return self.rtoken(tok, '/')
+            if self.match('%'):
+                if self.match('='):
+                    return self.rtoken(tok, '%=')
+                return self.rtoken(tok, '%')
             for i in SINGLE_TOKENS:
                 if self.match(i):
                     return self.rtoken(tok, i)

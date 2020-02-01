@@ -28,6 +28,11 @@ class TokenType(Enum):
     S_QUOTE = "'"
     D_QUOTE = '"'
     # TWO CHARACTERS
+    ASPLUS = '+='
+    ASMINUS = '-='
+    ASFDIV = '/='
+    ASMUL = '*='
+    ASMOD = '%='
     POWER = '**'
     COMP_EQ = '=='
     COMP_LTE = '>='
@@ -40,14 +45,18 @@ class TokenType(Enum):
     ELLIPSIS = '...'
     COMP_ID = '==='
     COMP_ID_NOT = '!=='
-    # MANAGEMENT STATEMENTS
-    PACKAGE = 'package'
-    IMPORT = 'import'
-    USE = 'use'
+    # STATEMENTS
+    OUTER = 'outer'
     GLOBAL = 'global'
+    DELETE = 'delete'
+    RETURN = 'return'
+    ASSERT = 'assert'
     # OBJECT CONSTRUCTION
     FUNCTION = 'function'
+    STATIC = 'static'
     STRUCT = 'struct'
+    FROM = 'from'
+    NEW = 'new'
     # DATA TYPE Literals
     TRUE = 'true'
     FALSE = 'false'
@@ -55,12 +64,9 @@ class TokenType(Enum):
     # CONDITIONALS
     IF = 'if'
     ELSE = 'else'
-    RETURN = 'return'
     AND = 'and'
     OR = 'or'
     NOT = 'not'
-    # STATEMENTS
-    REMOVE = 'remove'
     # LOOPING
     WHILE = 'while'
     FOR = 'for'

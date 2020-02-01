@@ -1,6 +1,0 @@
-func do = function() {
-  print("first");
-  return;
-  print("second");
-}
-do();

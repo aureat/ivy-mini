@@ -1,0 +1,13 @@
+function accumulator(start) {
+  number = start;
+  function adder(amount) {
+      outer number;
+      number += amount;
+      return number;
+  }
+  return adder;
+}
+adder = accumulator(20);
+adder(40);
+adder(50);
+print(adder(100));

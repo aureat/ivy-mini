@@ -23,7 +23,7 @@ class IvyObj(object):
         self.object = object
         self.type = 'SystemObject'
         self.interpreter = interpreter
-        self.trace=trace
+        self.trace = trace
         self.token = None
         self.objdef = AttributeObject({
             'name': name,

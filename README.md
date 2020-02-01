@@ -1,183 +1,123 @@
-# Ivy-lang
-A programming language with mostly javascript syntax written in python. Ivy Language was developed as a research project to understand how dynamic and modifiable can you make a programming language. An ivy program nd modify attributes
+# ivy-lang
+Ivy - a programming language with mostly javascript syntax written in python. Ivy Language was developed as a research project to create a modifiable attribute-based object language interpreter. The language highly resembles javascript and has enough features to write most programs.
 
 # Features
 * Dynamically Typed
 * Expressions and Statements
+* Binding and Scoping
 * Error Tracebacks
 * Object Attributes
 * Binary Operations
 * Conditional Control Flow
-* Ternary Conditional
 * Looping Control Flow
-* Functions
-* Anonymous Functions
+* Functions and Lambdas
 * Classes and constructors
-* Methods
+* Atribute-based object model
+* Bounded Methods
+* Static methods and attributes
 
 # How to use the console
-* Run the `ivy` file to initialize the repl or type `python ivy.py -p` in terminal
+* Run the `ivy` file to initialize the repl or type `python ivy.py` in terminal
+
 * To run ivy test files type `python ivy.py -f [filepath]` in terminal
-e.g. `python ivy.py -f tests/conditional.ivy`
-* To tokenize an ivy file run `python ivy.py -t [filepath]` (note that you can either put the whole path or search for files within the current directory)
+e.g. `python ivy.py -f tests/factorial.ivy`
+* To import an ivy file use the built-in import function e.g. `import('tests/factorial.ivy');`
 
-# Technical Specifications
-## Features
-* Builtin-type objects: Null, Integer, Float, String, Boolean, Collection, Function
-* All literals are resolved into a builtin-type object
-* Statements are not evaluated to a value unless they are expressions
-* Expressions are evaluated to a type object (which means they are evaluated to a value)
+# Tests
+```js
+// tests/structs.ivy
+struct Person {
 
-## Objects
-### Ivy Objects Overview
-* ATTRIBUTES: Object attributes of an ivy object including methods and names like `object.istrue()` or `object.attrget()`
-* INPSPECT: Object Definition of an ivy object, e.g. name, type, class etc. `object.inspect.name`
+    function construct(name, surname, age) {
+        self.name = name;
+        self.surname = surname;
+        self.age = age;
+    }
 
-### Names in INSPECT
-* name
-* reference
-* type
-* class
-* classname
-* instance
-* isnull
-* istrue
-* callable
-* indexable
-* length
-* params
-* block
-* bound
-* native
+    // call a method to get fullname
+    function full_name() {
+        return self.name + " " + self.surname;
+    }
 
-### Ivy Object Methods and Attributes
-#### Object Description
-* inspect
-* istrue
-* isnull
-* callable
-* indexable
-* gettype
-* istype
+    // call the static function and use a name and a surname
+    static function anyname(name, surname) {
+        return name + " " + surname;
+    }
 
-#### Object Attribute Methods
-* attrhas
-* attrget
-* attrset
-* attrdel
+    // or the block can initialize an instance variable
+    // and call the method
+    self.fullname = self.full_name();
 
-#### Representation & Printing
-* repr
-* printable
+}
 
-#### Collectible Methods
-* getitem
-* setitem
-* delitem
-* length
-
-#### Iteration Methods
-* iterate
-* next
-
-#### Error Methods
-* error
-* undefined
-
-#### Binary Operation Methods
-* opadd
-* opsub
-* opmult
-* opdiv
-* opmod
-* oppow
-* oplt
-* oplte
-* opgt
-* opgte
-* opeq
-* opeqnot
-* opnot
-* opin
-* opideq
-* opideqnot
-* opminus
-* opplus
-
-## Grammar
+person = new Person("Altun", "Hasanli", 17);
+print(person.type);
+print(person.fullname);
+print(person.full_name());
+print(Person.anyname(person.name, person.surname));
 ```
-program := ([statement] | [function-declaration] | [conditional] | [while-loop] | [for-loop])*
-conditional := if [expression] [block] (elif [expression] [block])+ (else [block])?
-while-loop := while [expression] [block]
-for-loop := for [iteration] [block]
-function-declaration := func [identifier]: "(" [list-parameters] ")" ( -> "(" [list-parameters] ")" )? [block]
-```
+```js
+// tests/fibonacci.ivy
+function fibonacci(n) {
+    if(n <= 1) return 1;
+    return fibonacci(n-1) + fibonacci(n-2);
+}
 
+print(fibonacci(10));
 ```
-statement := ([assignment] | [expression] | [package] | [import] | [return] | break | continue) ";"
-assignment := [identifier] = [expression]
-return := return (expression)?;
-package := package [identifier]
-import := import [identifier]
-```
+```js
+// tests/factorial.ivy
+function factorial(n) {
+    if(n > 1) {
+        return n * factorial(n-1);
+    }
+    return n;
+}
 
+print(factorial(6));
 ```
-expression := [binfactor] (and [binfactor])*
-binfactor := [binary] (or [binary])*
-binary := [term] (( < | <= | > | >= | == | != | === | !== ) [term])?
-term := [factor] (( + | - [ ] ) [factor])*
-factor := [atom] (( * | / | % ) [atom])*
-atom := [number] | [string] | [function-call] | [attribute-call] | [index-call] | "(" [expression] ")"
-```
+```js
+// tests/accumulator.ivy
+function accumulator(start) {
+  number = start;
+  function adder(amount) {
+      outer number;
+      number += amount;
+      return number;
+  }
+  return adder;
+}
 
+adder = accumulator(20);
+adder(40);
+adder(50);
+print(adder(100));
 ```
-type := [identifier] | int | float | str | bool | coll | arr | dict | func
-list-parameters := ([declaration],)*
-function-[block] := function ( [list-parameters] ) [block]
-[block] := { [program] }
-```
+```js
+// tests/maxitem.ivy
+function findMax(arr) {
+    max = arr[0];
+    a = 1;
+    while (a < length(arr)) {
+        if (arr[a] > max) {
+            max = arr[a];
+        }
+        a += 1;
+    }
+    return max;
+}
 
+arr = [1,2,50,4,5];
+print(findMax(arr));
 ```
-list-expression := ([expression],)*
-collection := [ list-[expression] ]
+```js
+// tests/while1.ivy
+counter = 0;
+while(true) {
+    if(counter == 10) {
+        break;
+    }
+    print(counter);
+    counter += 1;
+}
 ```
-
-```
-variable-call := [identifier]
-function-call := ([identifier] | [function-[block]]) "(" [list-[expression]] ")"
-attribute-call := [identifier] ("." [identifier])+
-index-call := ([identifier] | [collection]) "[" [expression] "]"
-```
-
-```
-range := [integer] .. [integer]
-iteration := [identifier] in ([range] | [collection])
-```
-
-```
-identifier := [a-zA-Z_] ( [a-zA-Z0-9_] )*
-number := (+|-| ) [integer] | [float]
-integer := [0-9]+ (TokenType.INTEGER_CONSTANT)
-float := [0-9]*(.[0-9]+)? (TokenType.FLOAT_CONSTANT)
-boolean := true | false
-string := " [.*] " | ' [.*] '
-```
-
-## TO-DO
-- [ ] Print statements call functions for the second time
-- [ ] Better block and statement management
-- [ ] Complete object model
-- [ ] Methods of Methods (issue: recursion)
-- [ ] Function Declaration
-- [ ] Iterables
-- [ ] Looping and Control Flow
-- [ ] Finish binary operations
-- [ ] Callstack needs a fix: fibonacci function not working
-- [ ] Build semantic analyzer and symbol tables
-- [ ] If-Else Conditionals PERMENANT PATCH
-- [ ] Parameters implementation and call stack creation for blocks
-- [ ] System framework (system module name)
-- [ ] Local and global environment references
-- [ ] Define types in memory, referencing python-implemented objects
-- [ ] Handle type conversions
-- [ ] Implement the system package
