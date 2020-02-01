@@ -24,9 +24,9 @@ e.g. `python ivy.py -f tests/factorial.ivy`
 * To import an ivy file use the built-in import function e.g. `import('tests/factorial.ivy');`
 
 ## References
-[1] https://ruslanspivak.com/lsbasi-part1/
-[2] https://craftinginterpreters.com
-[3] http://aosabook.org/en/500L/a-simple-object-model.html
+* https://ruslanspivak.com/lsbasi-part1/
+* https://craftinginterpreters.com
+* http://aosabook.org/en/500L/a-simple-object-model.html
 
 # Tests
 ```js
