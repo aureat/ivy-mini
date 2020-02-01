@@ -17,11 +17,16 @@ Ivy - a programming language with mostly javascript syntax written in python. Iv
 * Static methods and attributes
 
 # How to use the console
-* Run the `ivy` file to initialize the repl or type `python ivy.py` in terminal
+* Run the `ivy-console` executable to initialize the repl or type `python ivy.py` in terminal
 
 * To run ivy test files type `python ivy.py -f [filepath]` in terminal
 e.g. `python ivy.py -f tests/factorial.ivy`
 * To import an ivy file use the built-in import function e.g. `import('tests/factorial.ivy');`
+
+## References
+[1] https://ruslanspivak.com/lsbasi-part1/
+[2] https://craftinginterpreters.com
+[3] http://aosabook.org/en/500L/a-simple-object-model.html
 
 # Tests
 ```js

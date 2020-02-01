@@ -10,7 +10,7 @@ class Error(Exception):
         self.trace = tracestack
 
     def get_error(self):
-        error = '\nSystem Trace (most recent activity last):\n'
+        error = 'System Trace (most recent activity last):\n'
         error+='...\n'
         for i in self.trace.trace:
             error += '* ' + str(i['type']) + '\n'
@@ -35,7 +35,7 @@ class Error(Exception):
                 filepath = i['filepath']
                 error += f'\t{filepath}'
             error += '\n'
-        error += '> {}: {}\n'.format(self.name, self.message)
+        error += '> {}: {}'.format(self.name, self.message)
         return error
 
     def __repr__(self):

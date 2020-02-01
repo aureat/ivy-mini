@@ -13,12 +13,21 @@ TODO:
         are called and returned as a function wrapper, and their call methods have
         an parameter signature of 1.
       - fix function modeling and method handling
+- Type object as struct instances
+    - magic methods and attributes _name, _type, _struct, _model
+        _add, _mult, _repr, _string, _getattr, _hasattr, _delattr, setattr, etc.
+- Struct Modification capability, extensions, display numbers in a different way for example
+    struct Integer (from Integer) {
+        function string() {
+            return "this integer's value is " + self.value;
+        }
+    }
 
 tests
 - interesting stuff with attribute modification for structs
 and struct extensions : struct Object (from Object)
 - modify method of a struct, replace with a function
-expression bound to another scope, see what happens
+expression bound to another scope, scope binding is buggy
 
 """
 

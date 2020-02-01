@@ -53,7 +53,7 @@ def repl():
             resolver.resolve(file, tree)
             res = interpreter.interpret(file, tree)
         except Exception as e:
-            sys.stderr.write(str(e))
+            sys.stderr.write(str(e) + '\n')
             trace.clear()
 
 def main():
