@@ -484,15 +484,12 @@ class Interpreter:
         var = self.visit(node.variable)
         try:
             attr = self.getattr(var, node.attribute.value)
-            if attr:
-                return attr
-            self.error(mes="Object of type '%s' does not have the attribute '%s'" % (self.typeof(var), node.attribute.value),
-                       token=node.attribute,
-                       etype=IvyAttributeError)
+            return attr;
         except IvyAttributeError:
-            self.error(mes="Object of type '%s' does not have the attribute '%s'" % (self.typeof(var), node.attribute.value),
-                       token=node.attribute,
-                       etype=IvyAttributeError)
+            return None
+            # self.error(mes="Object of type '%s' does not have the attribute '%s'" % (self.typeof(var), node.attribute.value),
+            #            token=node.attribute,
+            #            etype=IvyAttributeError)
 
     def visit_AttributeSet(self, node):
         att = node.attribute.value

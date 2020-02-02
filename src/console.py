@@ -39,7 +39,6 @@ def repl():
     lexer = Lexer(trace=trace)
     parser = Parser(trace=trace)
     interpreter = Interpreter(trace, console_mode=True)
-    resolver = Resolver(interpreter)
     write("(c) Altun Hasanli\n")
     write("Ivy Language REPL.\n")
     while True:
@@ -50,6 +49,7 @@ def repl():
             file = io.newfile()
             tokens = lexer.tokenizefile(file)
             tree = parser.parse(file, tokens)
+            resolver = Resolver(interpreter)
             resolver.resolve(file, tree)
             res = interpreter.interpret(file, tree)
         except Exception as e:

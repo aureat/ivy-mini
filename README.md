@@ -62,6 +62,36 @@ print(person.full_name());
 print(Person.anyname(person.name, person.surname));
 ```
 ```js
+struct InstanceCounter {
+
+    // counter variable initalized to 0
+    static count = 0;
+
+    // returns a new instance of the instance counter
+    static function _new() {
+        return new InstanceCounter();
+    }
+
+    // increases the static count variable
+    // when an object is constructed
+    function construct() {
+        obj.count += 1;
+    }
+
+}
+
+// generate 10 instances of this counter
+i = 0;
+while (i < 10) {
+  InstanceCounter._new();
+  i += 1;
+}
+
+// get the static 'count' variable 
+print(InstanceCounter.count); // 10
+
+```
+```js
 // tests/fibonacci.ivy
 function fibonacci(n) {
     if(n <= 1) return 1;
